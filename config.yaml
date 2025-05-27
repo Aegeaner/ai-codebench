@@ -1,0 +1,42 @@
+# AI Chat Assistant Configuration
+
+# Conversation settings
+conversation:
+  history_window_size: 3
+  
+# Performance settings
+performance:
+  enable_context_caching: true
+  enable_async_calls: true
+
+# Provider configurations
+providers:
+  claude:
+    # Available models: claude-sonnet-4-20250514, claude-3-5-haiku-20241022, claude-3-opus-20240229
+    default_model: "claude-sonnet-4-20250514"
+    knowledge_model: "claude-sonnet-4-20250514"
+    code_model: "claude-sonnet-4-20250514"
+    
+  deepseek:
+    # Available models: deepseek-coder, deepseek-chat
+    default_model: "deepseek-chat"
+    knowledge_model: "deepseek-chat"
+    code_model: "deepseek-coder"
+    
+  gemini:
+    # Available models: gemini-2.5-flash-preview-05-20
+    default_model: "gemini-2.5-flash-preview-05-20"
+    knowledge_model: "gemini-2.5-flash-preview-05-20"
+    code_model: "gemini-2.5-flash-preview-05-20"
+
+# Task routing preferences
+task_routing:
+  # Preferred provider for each task type
+  knowledge_provider: "claude"  # claude, deepseek, gemini
+  code_provider: "deepseek"        # claude, deepseek, gemini
+  
+  # Fallback order when preferred provider is unavailable
+  fallback_order:
+    - "claude"
+    - "deepseek"
+    - "gemini"

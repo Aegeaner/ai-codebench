@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.python-version
+
+# Environments
+.env
+.venv
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# PDM
+.pdm-python
+pdm.lock
+__pypackages__/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# AI bot response cache dir
+answers/
