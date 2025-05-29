@@ -21,7 +21,7 @@ providers:
     # Available models: deepseek-coder, deepseek-chat
     default_model: "deepseek-chat"
     knowledge_model: "deepseek-chat"
-    code_model: "deepseek-coder"
+    code_model: "deepseek-reasoner"
     
   gemini:
     # Available models: gemini-2.5-flash-preview-05-20
