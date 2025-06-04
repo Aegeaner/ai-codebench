@@ -124,6 +124,9 @@ Multi-provider AI assistant with model configuration support.
             elif task_type in ["learn", "learning", "knowledge"]:
                 self.router.current_task_type = TaskType.KNOWLEDGE
                 self.console.print("[green]Switched to learning tasks[/green]")
+            elif task_type in ["write", "writing"]:
+                self.router.current_task_type = TaskType.WRITE
+                self.console.print("[green]Switched to writing tasks[/green]")
             else:
                 self.console.print(
                     Panel(
@@ -133,11 +136,15 @@ Multi-provider AI assistant with model configuration support.
                     )
                 )
         else:
-            current = (
-                "coding"
-                if self.router.current_task_type == TaskType.CODE
-                else "learning"
-            )
+            current_task = self.router.current_task_type
+            if current_task == TaskType.CODE:
+                current = "coding"
+            elif current_task == TaskType.KNOWLEDGE:
+                current = "learning"
+            elif current_task == TaskType.WRITE:
+                current = "writing"
+            else:
+                current = "unknown"
             self.console.print(f"Current task type: {current}")
 
     def _handle_stat_command(self):
@@ -268,8 +275,22 @@ Available Commands:
                 self.current_provider, self.router.current_task_type
             )
 
-            messages = self.conversation.get_messages_for_api(include_system=True)
-            messages.append(Message(role="user", content=user_input))
+            messages = self.conversation.get_messages_for_api(
+                include_system=True,
+                task_type=self.router.current_task_type
+            )
+            
+            # Format user input based on task type
+            if self.router.current_task_type == TaskType.WRITE:
+                formatted_user_input = f"Please help me polish the following English writing drafts for clarity, grammar, and natural tone. Keep the author's voice as much as possible:\n\n{user_input}"
+            elif self.router.current_task_type == TaskType.CODE:
+                formatted_user_input = f"Please help me analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code: \n\n{user_input}"
+            elif self.router.current_task_type == TaskType.KNOWLEDGE:
+                formatted_user_input = f"Please teach me the concept step by step: \n\n{user_input}"
+            else:
+                formatted_user_input = user_input
+                
+            messages.append(Message(role="user", content=formatted_user_input))
 
             if self.stream_mode == "async":
                 if provider.supports_async and hasattr(provider, "stream_completion"):
@@ -510,6 +531,8 @@ async def async_main(
             cli.router.current_task_type = TaskType.CODE
         elif task == "learning":
             cli.router.current_task_type = TaskType.KNOWLEDGE
+        elif task == "write":
+            cli.router.current_task_type = TaskType.WRITE
 
     # Set initial streaming mode if provided
     if mode:
@@ -540,8 +563,8 @@ async def async_main(
 @click.option(
     "--task",
     "-t",
-    type=click.Choice(["code", "learning"]),
-    help="Set the initial task type (code or learning)",
+    type=click.Choice(["code", "learn", "write"]),
+    help="Set the initial task type (code, learn, or write)",
 )
 
 @click.option(

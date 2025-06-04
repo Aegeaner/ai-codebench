@@ -1,7 +1,8 @@
 """Conversation history management"""
 
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
+from .config import TaskType
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -58,24 +59,33 @@ class ConversationHistory:
 
         self._save_session()
 
-    def get_messages_for_api(self, include_system: bool = False) -> List[Message]:
+    def get_messages_for_api(
+        self, 
+        include_system: bool = False, 
+        task_type: Union[TaskType, None] = None
+    ) -> List[Message]:
         """Convert conversation history to API messages format"""
         messages = []
 
         if include_system:
-            messages.append(
-                Message(
-                    role="system",
-                    content="You are a helpful AI assistant for both knowledge learning and code tasks. For the knowledge learning task, teach the concept step by step. For the code tasks, you only need to analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code.",
-                )
-            )
+            if task_type == TaskType.KNOWLEDGE:
+                system_content = "You are a helpful AI assistant for knowledge learning. Teach the concept step by step."
+            elif task_type == TaskType.CODE:
+                system_content = "You are a helpful AI assistant for code tasks. Analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code."
+            elif task_type == TaskType.WRITE:
+                system_content = "You are a helpful AI assistant for writing instruction, who polishes English drafts for clarity, grammar, and natural tone. Keep the author's voice as much as possible."
+            else:
+                # Default system prompt for unknown/mixed task types
+                system_content = "You are a helpful AI assistant for both knowledge learning and code tasks. For the knowledge learning task, teach the concept step by step. For the code tasks, you only need to analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code."
+                
+            messages.append(Message(role="system", content=system_content))
 
         # Add conversation history within window
         for turn in (
             self.turns[:-1] if self.turns else []
         ):  # Exclude current turn if it exists
-            messages.append(Message(role="user", content=turn.user_message))
             messages.append(Message(role="assistant", content=turn.assistant_message))
+            messages.append(Message(role="user", content=turn.user_message))
 
         return messages
 

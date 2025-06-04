@@ -11,6 +11,7 @@ from enum import Enum
 class TaskType(Enum):
     KNOWLEDGE = "knowledge"
     CODE = "code"
+    WRITE = "write"
 
 
 class Provider(Enum):
@@ -76,8 +77,13 @@ class Config:
 
     def _load_from_env(self):
         """Override defaults from environment variables"""
-        if os.getenv("HISTORY_WINDOW_SIZE"):
-            self.history_window_size = int(os.getenv("HISTORY_WINDOW_SIZE"))
+        history_size = os.getenv("HISTORY_WINDOW_SIZE")
+        if history_size and history_size.isdigit():
+            try:
+                self.history_window_size = int(history_size)
+            except (TypeError, ValueError):
+                # Handle invalid values gracefully
+                pass
 
     def _get_provider_config(self, provider: Provider) -> Optional[ProviderConfig]:
         """Helper to get provider config with fallback to defaults"""
@@ -202,7 +208,7 @@ class Config:
         if not provider_config:
             return DEFAULT_MODELS.get(provider, "")
 
-        if task_type == TaskType.KNOWLEDGE:
+        if task_type == TaskType.KNOWLEDGE or task_type == TaskType.WRITE:
             return provider_config.knowledge_model
         elif task_type == TaskType.CODE:
             return provider_config.code_model
