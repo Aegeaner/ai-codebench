@@ -1,6 +1,7 @@
 """Interactive CLI for AI Chat Assistant"""
 
 import asyncio
+import re
 from typing import Optional
 from pathlib import Path
 from datetime import datetime
@@ -432,6 +433,10 @@ Available Commands:
             self.console.print(Markdown(content))
             self._add_to_history(user_input, content, model, usage)
 
+    def _clean_filename(self, filename):
+        """Remove newlines and trim whitespace from filename"""
+        return re.sub(r'\s+', ' ', filename).strip()
+
     def _add_to_history(
         self, user_input: str, response: str, model: str, usage: Optional[dict] = None
     ):
@@ -456,6 +461,7 @@ Available Commands:
                 time_str = datetime.now().strftime("%H%M")
                 safe_question = user_input[:12].replace("/", "_").replace("\\", "_")
                 filename = f"{time_str}_{safe_question}.md"
+                filename = self._clean_filename(filename)
                 filepath = answers_dir / filename
 
                 # Write both question and answer in UTF-8 encoding
