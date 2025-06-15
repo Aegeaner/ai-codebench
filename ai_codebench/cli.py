@@ -562,7 +562,7 @@ async def async_main(
 @click.option(
     "--provider",
     "-p",
-    type=click.Choice(["claude", "deepseek", "gemini"]),
+    type=click.Choice(["claude", "deepseek", "gemini", "openrouter"]),
     help="Preferred provider",
 )
 

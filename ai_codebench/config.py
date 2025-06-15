@@ -18,6 +18,7 @@ class Provider(Enum):
     CLAUDE = "claude"
     DEEPSEEK = "deepseek"
     GEMINI = "gemini"
+    OPENROUTER = "openrouter"
 
 
 # Default models for each provider
@@ -25,6 +26,7 @@ DEFAULT_MODELS = {
     Provider.CLAUDE: "claude-sonnet-4-20250514",
     Provider.DEEPSEEK: "deepseek-chat",
     Provider.GEMINI: "gemini-2.5-flash-preview-05-20",
+    Provider.OPENROUTER: "openai/gpt-4o",
 }
 
 
@@ -74,6 +76,7 @@ class Config:
         self.ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
         self.deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
 
     def _load_from_env(self):
         """Override defaults from environment variables"""
@@ -259,6 +262,7 @@ class Config:
             Provider.CLAUDE: self.ANTHROPIC_API_KEY,
             Provider.DEEPSEEK: self.deepseek_api_key,
             Provider.GEMINI: self.gemini_api_key,
+            Provider.OPENROUTER: self.openrouter_api_key,
         }
         return key_map.get(provider) is not None
 
