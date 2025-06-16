@@ -466,7 +466,7 @@ Available Commands:
 
                 # Write both question and answer in UTF-8 encoding
                 with open(filepath, "w", encoding="utf-8") as f:
-                    f.write(f"Q:\n {user_input}\n\nA:\n {response}\n")
+                    f.write(f"Q:\n{user_input}\n\nA:\n{response}\n")
             except Exception as e:
                 self.console.print(f"[red]Error saving response: {e}[/red]")
 
