@@ -2,9 +2,12 @@
 
 import asyncio
 import re
+import threading
 from typing import Optional
 from pathlib import Path
 from datetime import datetime
+
+from .archive import AnswerArchive
 
 import click
 from rich.console import Console
@@ -32,6 +35,16 @@ class ChatCLI:
         self.multi_mode = False  # Default to single-line mode
         self._current_stream_task: Optional[asyncio.Task] = None  # Track async tasks
         self.record_enabled = False  # For /record command
+        
+        # Initialize answer archive with 14-day retention
+        self.archive = AnswerArchive(retention_days=14)
+        
+        # Start background archiving thread
+        self.archive_thread = threading.Thread(
+            target=self.archive.start_periodic_archiving, 
+            daemon=True
+        )
+        self.archive_thread.start()
 
     def _display_providers_table(self):
         """Show available providers in a table"""
@@ -106,6 +119,8 @@ Multi-provider AI assistant with model configuration support.
             self._handle_multi_command(command)
         elif cmd == "/record":
             self._handle_record_command(command)
+        elif cmd == "/search":
+            self._handle_search_command(command)
         else:
             self.console.print(
                 Panel(f"Unknown command: {cmd}", title="Error", border_style="red")
@@ -174,11 +189,12 @@ Available Commands:
 - /help - Show this help message
 - /model - List available models and show current model
 - /provider [name] - Switch provider (claude/deepseek/gemini)
-- /task [type] - Switch task type (code/learning)
+- /task [type] - Switch task type (code/learning/write)
 - /stat - Show usage statistics
 - /mode [sync|async] - Set streaming mode (default: sync)
 - /multi [on/off] - Toggle multi-line input mode (default: off)
 - /record [on/off] - Save responses to Markdown files (default: off)
+- /search [query] - Search archived answers
 - /exit - Quit the application
         """
         self.console.print(Panel(help_text, title="Help", border_style="blue"))
@@ -436,6 +452,75 @@ Available Commands:
     def _clean_filename(self, filename):
         """Remove newlines and trim whitespace from filename"""
         return re.sub(r'\s+', ' ', filename).strip()
+
+    def _handle_search_command(self, command: str):
+        """Handle /search command to search archived answers and restore to current answers"""
+        parts = command.split(maxsplit=1)
+        query = parts[1] if len(parts) > 1 else ""
+        
+        if not query:
+            self.console.print(
+                Panel("Please provide a search query", title="Error", border_style="red")
+            )
+            return
+            
+        results = self.archive.search_answers(query)
+        
+        if not results:
+            self.console.print("[yellow]No matching results found[/yellow]")
+            return
+            
+        table = Table(title=f"Search Results for '{query}'")
+        table.add_column("ID", style="cyan")
+        table.add_column("Date", style="green")
+        table.add_column("Question", style="yellow")
+        
+        # Prepare to restore answers
+        restored_ids = []
+        current_date = datetime.now().strftime("%Y%m%d")
+        answers_dir = Path("answers") / current_date
+        answers_dir.mkdir(parents=True, exist_ok=True)
+        
+        for result in results:
+            answer_id, date, filename, question, answer = result
+            # Shorten question for display
+            short_question = (question[:50] + '...') if len(question) > 50 else question
+            table.add_row(str(answer_id), date, short_question)
+            
+            # Generate new filename using the same format as _add_to_history
+            time_str = datetime.now().strftime("%H%M")  # Only hours and minutes
+            safe_question = (question[:12] if question else "restored").replace("/", "_").replace("\\", "_")
+            base_filename = f"{time_str}_{safe_question}.md"
+            base_filename = self._clean_filename(base_filename)
+            
+            # Handle filename conflicts with incremental suffix
+            counter = 1
+            new_filename = base_filename
+            while (answers_dir / new_filename).exists():
+                # Remove .md extension for suffixing
+                name_without_ext = base_filename[:-3]
+                new_filename = f"{name_without_ext}_{counter}.md"
+                counter += 1
+                
+            filepath = answers_dir / new_filename
+            
+            try:
+                # Write restored answer to current answers directory
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(f"Q:\n{question}\n\nA:\n{answer}\n")
+                restored_ids.append(answer_id)
+            except Exception as e:
+                self.console.print(f"[red]Error restoring answer {answer_id}: {e}[/red]")
+            
+        self.console.print(table)
+        self.console.print(f"[bold green]Found {len(results)} results[/bold green]")
+        
+        # Delete restored answers from archive
+        if restored_ids:
+            self.archive.delete_answers(restored_ids)
+            self.console.print(f"[green]Restored {len(restored_ids)} answers to current answers directory and removed from archive.[/green]")
+        else:
+            self.console.print("[yellow]No answers were restored[/yellow]")
 
     def _add_to_history(
         self, user_input: str, response: str, model: str, usage: Optional[dict] = None
