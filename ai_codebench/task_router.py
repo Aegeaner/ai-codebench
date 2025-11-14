@@ -2,7 +2,13 @@
 
 from typing import Optional, Dict, Any
 from .config import Config, TaskType, Provider
-from .providers import BaseProvider, ClaudeProvider, DeepSeekProvider, GeminiProvider
+from .providers import (
+    BaseProvider,
+    ClaudeProvider,
+    DeepSeekProvider,
+    GeminiProvider,
+    KimiProvider,
+)
 
 
 class TaskRouter:
@@ -36,6 +42,14 @@ class TaskRouter:
             default_model = self.config.get_default_model(Provider.GEMINI)
             self._providers[Provider.GEMINI] = GeminiProvider(
                 self.config.gemini_api_key,
+                self.config.enable_context_caching,
+                default_model,
+            )
+
+        if self.config.has_api_key(Provider.KIMI):
+            default_model = self.config.get_default_model(Provider.KIMI)
+            self._providers[Provider.KIMI] = KimiProvider(
+                self.config.kimi_api_key,
                 self.config.enable_context_caching,
                 default_model,
             )

@@ -58,7 +58,7 @@ class OpenAICompatibleProvider(BaseProvider):
 
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
+                yield {"text": chunk.choices[0].delta.content}
             if hasattr(chunk, "usage"):
                 yield {"usage": self._extract_usage_stats(chunk)}
 

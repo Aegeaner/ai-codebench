@@ -4,6 +4,7 @@ __pycache__/
 *.pyo
 *.pyd
 .python-version
+ai_codebench.egg-info/
 
 # Environments
 .env

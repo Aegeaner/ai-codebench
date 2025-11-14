@@ -19,6 +19,7 @@ class Provider(Enum):
     DEEPSEEK = "deepseek"
     GEMINI = "gemini"
     OPENROUTER = "openrouter"
+    KIMI = "kimi"
 
 
 # Default models for each provider
@@ -27,6 +28,7 @@ DEFAULT_MODELS = {
     Provider.DEEPSEEK: "deepseek-chat",
     Provider.GEMINI: "gemini-2.5-flash-preview-05-20",
     Provider.OPENROUTER: "openai/gpt-4o",
+    Provider.KIMI: "kimi-k2-thinking",
 }
 
 
@@ -48,6 +50,7 @@ class Config:
     ANTHROPIC_API_KEY: Optional[str] = None
     deepseek_api_key: Optional[str] = None
     gemini_api_key: Optional[str] = None
+    kimi_api_key: Optional[str] = None
 
     # Chat history settings
     history_window_size: int = 3
@@ -56,7 +59,12 @@ class Config:
     knowledge_provider: Provider = Provider.CLAUDE
     code_provider: Provider = Provider.DEEPSEEK
     fallback_order: List[Provider] = field(
-        default_factory=lambda: [Provider.CLAUDE, Provider.DEEPSEEK, Provider.GEMINI]
+        default_factory=lambda: [
+            Provider.CLAUDE,
+            Provider.DEEPSEEK,
+            Provider.GEMINI,
+            Provider.KIMI,
+        ]
     )
 
     # Performance settings
@@ -77,6 +85,7 @@ class Config:
         self.deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+        self.kimi_api_key = os.getenv("MOONSHOT_API_KEY")
 
     def _load_from_env(self):
         """Override defaults from environment variables"""
@@ -263,6 +272,7 @@ class Config:
             Provider.DEEPSEEK: self.deepseek_api_key,
             Provider.GEMINI: self.gemini_api_key,
             Provider.OPENROUTER: self.openrouter_api_key,
+            Provider.KIMI: self.kimi_api_key,
         }
         return key_map.get(provider) is not None
 

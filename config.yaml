@@ -3,7 +3,7 @@
 # Conversation settings
 conversation:
   history_window_size: 3
-  
+
 # Performance settings
 performance:
   enable_context_caching: true
@@ -16,27 +16,34 @@ providers:
     default_model: "claude-sonnet-4-20250514"
     knowledge_model: "claude-sonnet-4-20250514"
     code_model: "claude-sonnet-4-20250514"
-    
+
   deepseek:
     # Available models: deepseek-coder, deepseek-chat
     default_model: "deepseek-chat"
     knowledge_model: "deepseek-chat"
     code_model: "deepseek-reasoner"
-    
+
   gemini:
     # Available models: gemini-2.5-flash-preview-05-20
     default_model: "gemini-2.5-flash-preview-05-20"
     knowledge_model: "gemini-2.5-flash-preview-05-20"
     code_model: "gemini-2.5-flash-preview-05-20"
 
+  kimi:
+    # Available models: kimi-k2-turbo-preview
+    default_model: "kimi-k2-thinking"
+    knowledge_model: "kimi-k2-turbo-preview"
+    code_model: "kimi-k2-thinking"
+
 # Task routing preferences
 task_routing:
   # Preferred provider for each task type
-  knowledge_provider: "claude"  # claude, deepseek, gemini
-  code_provider: "deepseek"        # claude, deepseek, gemini
-  
+  knowledge_provider: "claude" # claude, deepseek, gemini, kimi
+  code_provider: "deepseek" # claude, deepseek, gemini, kimi
+
   # Fallback order when preferred provider is unavailable
   fallback_order:
     - "claude"
     - "deepseek"
     - "gemini"
+    - "kimi"
