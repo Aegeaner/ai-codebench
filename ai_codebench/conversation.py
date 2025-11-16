@@ -71,7 +71,7 @@ class ConversationHistory:
             if task_type == TaskType.KNOWLEDGE:
                 system_content = "You are a helpful AI assistant for knowledge learning. Teach the concept step by step."
             elif task_type == TaskType.CODE:
-                system_content = "You are a helpful AI assistant for code tasks. Analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code."
+                system_content = "You are a helpful AI assistant for code tasks. Analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code. Please respond in Simplified Chinese."
             elif task_type == TaskType.WRITE:
                 system_content = "You are a helpful AI assistant for writing instruction, who polishes English drafts for clarity, grammar, and natural tone. Keep the author's voice as much as possible."
             else:
@@ -80,12 +80,13 @@ class ConversationHistory:
                 
             messages.append(Message(role="system", content=system_content))
 
-        # Add conversation history within window
-        for turn in (
-            self.turns[:-1] if self.turns else []
-        ):  # Exclude current turn if it exists
-            messages.append(Message(role="assistant", content=turn.assistant_message))
-            messages.append(Message(role="user", content=turn.user_message))
+        # Add conversation history within window, unless in CODE mode
+        if task_type != TaskType.CODE:
+            for turn in (
+                self.turns[:-1] if self.turns else []
+            ):  # Exclude current turn if it exists
+                messages.append(Message(role="assistant", content=turn.assistant_message))
+                messages.append(Message(role="user", content=turn.user_message))
 
         return messages
 
