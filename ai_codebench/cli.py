@@ -534,8 +534,8 @@ Available Commands:
             usage=usage,
         )
 
-        # Save response to file if recording is enabled
-        if self.record_enabled:
+        # Save response to file if recording is enabled and not a WRITE task
+        if self.record_enabled and self.router.current_task_type != TaskType.WRITE:
             try:
                 # Create answers directory with date-based subdirectory
                 date_str = datetime.now().strftime("%Y%m%d")
