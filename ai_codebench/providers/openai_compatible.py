@@ -1,6 +1,6 @@
 """OpenAI-compatible provider base class"""
 
-from typing import AsyncGenerator, Dict, List, Optional
+from typing import AsyncGenerator, List, Optional
 import openai
 from .base import BaseProvider, Message, ChatResponse
 

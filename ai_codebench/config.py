@@ -70,6 +70,7 @@ class Config:
     # Performance settings
     enable_context_caching: bool = True
     enable_async_calls: bool = True
+    enable_async_answers: bool = False
 
     # Provider configurations
     provider_configs: Dict[Provider, ProviderConfig] = field(default_factory=dict)
@@ -150,6 +151,8 @@ class Config:
                 self.enable_context_caching = perf_config["enable_context_caching"]
             if "enable_async_calls" in perf_config:
                 self.enable_async_calls = perf_config["enable_async_calls"]
+            if "enable_async_answers" in perf_config:
+                self.enable_async_answers = perf_config["enable_async_answers"]
 
         # Provider configurations
         if "providers" in yaml_config:

@@ -2,7 +2,7 @@
 
 from typing import AsyncGenerator, Dict, List, Optional
 from openai import AsyncOpenAI, OpenAI
-from .openai_compatible import OpenAICompatibleProvider, Message, ChatResponse
+from .openai_compatible import OpenAICompatibleProvider, Message
 
 
 class DeepSeekProvider(OpenAICompatibleProvider):
