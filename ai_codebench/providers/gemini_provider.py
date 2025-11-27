@@ -2,7 +2,7 @@
 
 from typing import AsyncGenerator, List, Optional
 import google.generativeai as genai
-from .base import BaseProvider, Message, ChatResponse
+from .base import BaseProvider, Message, ChatResponse, ProviderAPIError
 
 
 class GeminiProvider(BaseProvider):
@@ -17,7 +17,6 @@ class GeminiProvider(BaseProvider):
         super().__init__(api_key, enable_caching, default_model)
         genai.configure(api_key=api_key)
         self._model = None
-        self._sync_client = genai.GenerativeModel(self.default_model)
 
     def _get_model(self, model_name: Optional[str] = None):
         """Get or create Gemini model instance"""
@@ -25,43 +24,6 @@ class GeminiProvider(BaseProvider):
         if self._model is None or self._model.model_name != model_name:
             self._model = genai.GenerativeModel(model_name)
         return self._model
-
-    def chat_completion_sync(
-        self, messages: List[Message], model: Optional[str] = None, **kwargs
-    ) -> ChatResponse:
-        """Generate sync chat completion"""
-        model_name = model or self.default_model
-        model_instance = genai.GenerativeModel(model_name)
-
-        # Convert messages to Gemini format
-        gemini_messages = []
-        for msg in messages:
-            if msg.role == "user":
-                gemini_messages.append({"role": "user", "parts": [msg.content]})
-            elif msg.role == "assistant":
-                gemini_messages.append({"role": "model", "parts": [msg.content]})
-
-        try:
-            generation_config = genai.types.GenerationConfig(
-                max_output_tokens=kwargs.get("max_tokens", 4096),
-                temperature=kwargs.get("temperature", 0.7),
-            )
-
-            if len(gemini_messages) == 1:
-                response = model_instance.generate_content(
-                    gemini_messages[0]["parts"][0], generation_config=generation_config
-                )
-            else:
-                chat = model_instance.start_chat(history=gemini_messages[:-1])
-                response = chat.send_message(
-                    gemini_messages[-1]["parts"][0], generation_config=generation_config
-                )
-
-            return ChatResponse(
-                content=response.text, usage=self._extract_usage_stats(response)
-            )
-        except Exception as e:
-            raise RuntimeError(f"Gemini sync API error: {e}")
 
     async def chat_completion(
         self, messages: List[Message], model: Optional[str] = None, **kwargs
@@ -98,18 +60,18 @@ class GeminiProvider(BaseProvider):
                 )
 
             if not response.candidates or not response.candidates[0].content.parts:
-                raise RuntimeError("Gemini API returned empty response")
+                raise ProviderAPIError("Gemini API returned empty response")
             
             return ChatResponse(
                 content=response.text, 
                 usage=self._extract_usage_stats(response)
             )
         except Exception as e:
-            raise RuntimeError(f"Gemini API error: {e}")
+            raise ProviderAPIError(f"Gemini API error: {e}") from e
 
     async def stream_completion(
         self, messages: List[Message], model: Optional[str] = None, **kwargs
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[dict, None]:
         """Generate streaming chat completion"""
         model_instance = self._get_model(model)
 
@@ -127,7 +89,6 @@ class GeminiProvider(BaseProvider):
             }
 
             if len(gemini_messages) == 1:
-                # Await the async generator creation
                 response_stream = await model_instance.generate_content_async(
                     gemini_messages[0]["parts"][0],
                     generation_config=generation_config,
@@ -135,7 +96,6 @@ class GeminiProvider(BaseProvider):
                 )
             else:
                 chat = model_instance.start_chat(history=gemini_messages[:-1])
-                # Await the async generator creation
                 response_stream = await chat.send_message_async(
                     gemini_messages[-1]["parts"][0],
                     generation_config=generation_config,
@@ -148,17 +108,14 @@ class GeminiProvider(BaseProvider):
                         if chunk.candidates and chunk.candidates[0].content.parts:
                             text = chunk.candidates[0].content.parts[0].text
                             if text:
-                                yield {
-                                    "text": text.strip(),
-                                    "usage": self._extract_usage_stats(chunk)
-                                }
+                                yield {"text": text.strip()}
+                            usage = self._extract_usage_stats(chunk)
+                            if usage:
+                                yield {"usage": usage}
                     except Exception as e:
-                        yield {
-                            "error": f"\n[Stream Error: {str(e)}]",
-                            "usage": None
-                        }
+                        yield {"error": f"Gemini streaming chunk error: {e}"}
         except Exception as e:
-            raise RuntimeError(f"Gemini streaming error: {e}")
+            yield {"error": f"Gemini streaming API error: {e}"}
 
     @property
     def supports_caching(self) -> bool:

@@ -6,7 +6,7 @@ Supports knowledge learning and code generation tasks with appropriate model sel
 context caching, and cost optimization features.
 """
 
-from ai_codebench.cli import main
+from ai_codebench import cli
 
 if __name__ == "__main__":
-    main()
+    cli.main()

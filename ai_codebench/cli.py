@@ -16,21 +16,25 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
-from .config import Config, Provider
+from .config import ApplicationConfig
 from .conversation import ConversationHistory
-from .task_router import TaskRouter, TaskType
-from .providers.base import Message
+from .task_router import TaskRouter
+from .providers.base import Message, ProviderAPIError
+from .settings import TaskType, Provider
+from .logger import setup_logging, get_logger
 
 
 class ChatCLI:
     """Interactive chat CLI with rich formatting"""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: ApplicationConfig):
         self.config = config
         self.console = Console()
-        self.conversation = ConversationHistory(config.history_window_size)
+        self.logger = get_logger(__name__)  # Get logger for ChatCLI
+        self.conversation = ConversationHistory(config.settings.history_window_size)
         self.conversation.clear_history()  # Ensure fresh start
         self.router = TaskRouter(config)
+        self.current_task_type = TaskType.KNOWLEDGE  # Default to knowledge tasks
         self.current_provider: Optional[Provider] = None
         self.stream_mode = "sync"  # Default to sync mode
         self.multi_mode = False  # Default to single-line mode
@@ -138,13 +142,13 @@ Multi-provider AI assistant with model configuration support.
         if len(parts) > 1:
             task_type = parts[1].lower()
             if task_type in ["code", "coding"]:
-                self.router.current_task_type = TaskType.CODE
+                self.current_task_type = TaskType.CODE
                 self.console.print("[green]Switched to coding tasks[/green]")
             elif task_type in ["learn", "learning", "knowledge"]:
-                self.router.current_task_type = TaskType.KNOWLEDGE
+                self.current_task_type = TaskType.KNOWLEDGE
                 self.console.print("[green]Switched to learning tasks[/green]")
             elif task_type in ["write", "writing"]:
-                self.router.current_task_type = TaskType.WRITE
+                self.current_task_type = TaskType.WRITE
                 self.console.print("[green]Switched to writing tasks[/green]")
             else:
                 self.console.print(
@@ -155,7 +159,7 @@ Multi-provider AI assistant with model configuration support.
                     )
                 )
         else:
-            current_task = self.router.current_task_type
+            current_task = self.current_task_type
             if current_task == TaskType.CODE:
                 current = "coding"
             elif current_task == TaskType.KNOWLEDGE:
@@ -215,6 +219,7 @@ Available Commands:
             self.console.print(
                 f"[yellow]No models for {provider.value.title()}[/yellow]"
             )
+            self.logger.warning(f"Model command failed: No models for {provider.value.title()}")
             return
 
         model_table = Table(title=f"{provider.value.title()} Models")
@@ -235,12 +240,9 @@ Available Commands:
         )
 
         # Show current task type and model
-        current_task_type = self.router.current_task_type
+        current_task_type = self.current_task_type
         current_model = self.config.get_model_for_provider_and_task(
             provider, current_task_type
-        )
-        self.console.print(
-            f"Current task: [bold]{current_task_type.value}[/bold] → model: [bold yellow]{current_model}[/bold yellow]"
         )
 
     def _handle_provider_command(self, command: str):
@@ -293,20 +295,20 @@ Available Commands:
 
             provider = self.router.get_available_providers()[self.current_provider]
             model = self.config.get_model_for_provider_and_task(
-                self.current_provider, self.router.current_task_type
+                self.current_provider, self.current_task_type
             )
 
             messages = self.conversation.get_messages_for_api(
                 include_system=True,
-                task_type=self.router.current_task_type
+                task_type=self.current_task_type
             )
             
             # Format user input based on task type
-            if self.router.current_task_type == TaskType.WRITE:
+            if self.current_task_type == TaskType.WRITE:
                 formatted_user_input = f"Please help me polish the following English writing drafts for clarity, grammar, and natural tone. Keep the author's voice as much as possible:\n\n{user_input}"
-            elif self.router.current_task_type == TaskType.CODE:
+            elif self.current_task_type == TaskType.CODE:
                 formatted_user_input = f"Please help me analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code: \n\n{user_input}"
-            elif self.router.current_task_type == TaskType.KNOWLEDGE:
+            elif self.current_task_type == TaskType.KNOWLEDGE:
                 formatted_user_input = f"Please teach me the concept step by step: \n\n{user_input}"
             else:
                 formatted_user_input = user_input
@@ -424,7 +426,7 @@ Available Commands:
                 if not self.record_enabled:
                     self.console.print("[red]Cannot enable background saving: Recording is not enabled. Use /record on first.[/red]")
                     return
-                if self.router.current_task_type == TaskType.WRITE:
+                if self.current_task_type == TaskType.WRITE:
                     self.console.print("[red]Cannot enable background saving for 'WRITE' task type.[/red]")
                     return
                 self.config.enable_async_answers = True
@@ -622,7 +624,7 @@ Available Commands:
         )
 
         # Save response to file if recording is enabled and not a WRITE task
-        if self.record_enabled and self.router.current_task_type != TaskType.WRITE:
+        if self.record_enabled and self.current_task_type != TaskType.WRITE:
             try:
                 # Create answers directory with date-based subdirectory
                 date_str = datetime.now().strftime("%Y%m%d")
@@ -697,7 +699,7 @@ async def async_main(
     background: bool,
 ):
     """Main async entry point"""
-    app_config = Config.from_file(config)
+    app_config = ApplicationConfig.from_file(config)  # Use ApplicationConfig
 
     if not any(app_config.has_api_key(p) for p in Provider):
         raise RuntimeError("No API keys configured")
@@ -712,11 +714,11 @@ async def async_main(
     # Set initial task type if provided
     if task:
         if task == "code":
-            cli.router.current_task_type = TaskType.CODE
+            cli.current_task_type = TaskType.CODE
         elif task == "learning":
-            cli.router.current_task_type = TaskType.KNOWLEDGE
+            cli.current_task_type = TaskType.KNOWLEDGE
         elif task == "write":
-            cli.router.current_task_type = TaskType.WRITE
+            cli.current_task_type = TaskType.WRITE
 
     # Set initial streaming mode if provided
     if mode:
@@ -728,11 +730,11 @@ async def async_main(
 
     # Set initial background saving mode from flag, respecting conditions
     if background:
-        if cli.record_enabled and cli.router.current_task_type != TaskType.WRITE:
+        if cli.record_enabled and cli.current_task_type != TaskType.WRITE:
             cli.config.enable_async_answers = True
         else:
             # If background is explicitly 'on' but conditions aren't met, log a warning
-            if background and (not cli.record_enabled or cli.router.current_task_type == TaskType.WRITE):
+            if background and (not cli.record_enabled or cli.current_task_type == TaskType.WRITE):
                 cli.console.print(
                     "[yellow]Warning: --background on ignored. Recording must be enabled and task type cannot be 'WRITE'.[/yellow]"
                 )

@@ -1,12 +1,12 @@
 """Conversation history management"""
 
-import json
 from typing import List, Dict, Any, Optional, Union
-from .config import TaskType
+from .settings import TaskType
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from .providers.base import Message
+from .conversation_store import ConversationStore, JsonConversationStore
 
 
 @dataclass
@@ -23,11 +23,20 @@ class ConversationTurn:
 
 
 class ConversationHistory:
-    """Manages conversation history with configurable window size"""
+    """Manages conversation history with configurable window size and pluggable storage"""
 
-    def __init__(self, window_size: int = 3, session_file: Optional[Path] = None):
+    def __init__(
+        self,
+        window_size: int = 3,
+        conversation_id: str = "default",
+        conversation_store: Optional[ConversationStore] = None,
+    ):
         self.window_size = window_size
-        self.session_file = session_file or Path.home() / ".ai_codebench_history.json"
+        self.conversation_id = conversation_id
+        self.conversation_store = (
+            conversation_store
+            or JsonConversationStore(base_dir=Path.home() / ".ai_codebench_history")
+        )
         self.turns: List[ConversationTurn] = []
         self._load_session()
 
@@ -124,41 +133,25 @@ class ConversationHistory:
         self._save_session()
 
     def _load_session(self):
-        """Load conversation history from file"""
+        """Load conversation history from file using the configured store"""
         self.turns = []  # Always start with empty turns
-        if self.session_file.exists():
-            try:
-                with open(self.session_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    # Only load turns if they have valid usage data
-                    self.turns = [
-                        turn for turn in [
-                            ConversationTurn(**t) for t in data.get("turns", [])
-                        ] if turn.usage is not None
-                    ]
-                    # Apply window size limit to loaded data
-                    if len(self.turns) > self.window_size:
-                        self.turns = self.turns[-self.window_size :]
-            except (json.JSONDecodeError, Exception):
-                pass  # Already initialized empty turns
+        data = self.conversation_store.load_conversation(self.conversation_id)
+        if data:
+            self.turns = [
+                turn for turn in [
+                    ConversationTurn(**t) for t in data
+                ] if turn.usage is not None
+            ]
+            if len(self.turns) > self.window_size:
+                self.turns = self.turns[-self.window_size :]
 
     def _save_session(self):
-        """Save conversation history to file"""
+        """Save conversation history to file using the configured store"""
         try:
-            self.session_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.session_file, "w", encoding="utf-8") as f:
-                json.dump(
-                    {
-                        "turns": [asdict(turn) for turn in self.turns],
-                        "window_size": self.window_size,
-                        "last_updated": datetime.now().isoformat(),
-                    },
-                    f,
-                    indent=2,
-                    ensure_ascii=False,
-                )
+            self.conversation_store.save_conversation(
+                self.conversation_id, [asdict(turn) for turn in self.turns]
+            )
         except Exception as e:
-            # Fail silently to not interrupt the chat flow
             print(f"Warning: Could not save session history: {e}")
 
     def get_statistics(self) -> Dict[str, Any]:

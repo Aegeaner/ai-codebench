@@ -1,7 +1,6 @@
 """DeepSeek provider using OpenAI-compatible API"""
 
 from typing import AsyncGenerator, Dict, List, Optional
-from openai import AsyncOpenAI, OpenAI
 from .openai_compatible import OpenAICompatibleProvider, Message
 
 
@@ -19,12 +18,7 @@ class DeepSeekProvider(OpenAICompatibleProvider):
         if not model:
             raise ValueError("No default model configured for DeepSeek provider")
         super().__init__(api_key, enable_caching=enable_caching, default_model=model)
-        self.async_client = AsyncOpenAI(
-            api_key=api_key, base_url="https://api.deepseek.com/v1"
-        )
-        self.sync_client = OpenAI(
-            api_key=api_key, base_url="https://api.deepseek.com/v1"
-        )
+        self.async_client.base_url = "https://api.deepseek.com/v1"
 
     @property
     def supports_caching(self) -> bool:
@@ -48,29 +42,18 @@ class DeepSeekProvider(OpenAICompatibleProvider):
         """Generate async streaming chat completion"""
         model = model or self.default_model
         messages_dict = [msg.to_dict() for msg in messages]
-        cumulative_usage = None
 
-        stream = await self.async_client.chat.completions.create(
-            model=model, messages=messages_dict, stream=True, **kwargs
-        )
+        try:
+            stream = await self.async_client.chat.completions.create(
+                model=model, messages=messages_dict, stream=True, **kwargs
+            )
 
-        async for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta.content:
-                chunk_usage = self._extract_usage_stats(chunk) if hasattr(chunk, "usage") else None
-                if chunk_usage:
-                    if cumulative_usage is None:
-                        cumulative_usage = chunk_usage
-                    else:
-                        cumulative_usage = {
-                            "prompt_tokens": cumulative_usage["prompt_tokens"] + chunk_usage["prompt_tokens"],
-                            "completion_tokens": cumulative_usage["completion_tokens"] + chunk_usage["completion_tokens"],
-                            "total_tokens": cumulative_usage["total_tokens"] + chunk_usage["total_tokens"]
-                        }
-                yield {
-                    "text": chunk.choices[0].delta.content,
-                    "usage": chunk_usage
-                }
-
-        # Yield final cumulative usage if available
-        if cumulative_usage:
-            yield {"usage": cumulative_usage}
+            async for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield {"text": chunk.choices[0].delta.content}
+                if hasattr(chunk, "usage"):
+                    usage = self._extract_usage_stats(chunk)
+                    if usage:
+                        yield {"usage": usage}
+        except Exception as e:
+            yield {"error": f"DeepSeek streaming API error: {e}"}

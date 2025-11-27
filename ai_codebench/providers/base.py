@@ -25,6 +25,11 @@ class ChatResponse:
     cached: bool = False
 
 
+class ProviderAPIError(Exception):
+    """Custom exception for provider API errors"""
+    pass
+
+
 class BaseProvider(ABC):
     """Base class for AI providers"""
 

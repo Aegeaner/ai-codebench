@@ -1,7 +1,6 @@
 """Claude provider using OpenAI-compatible API"""
 
 from typing import Optional
-from openai import AsyncOpenAI, OpenAI
 from .openai_compatible import OpenAICompatibleProvider
 
 
@@ -21,12 +20,8 @@ class ClaudeProvider(OpenAICompatibleProvider):
             default_model=default_model,
             **kwargs,
         )
-        self.async_client = AsyncOpenAI(
-            api_key=api_key, base_url="https://api.anthropic.com/v1/"
-        )
-        self.sync_client = OpenAI(
-            api_key=api_key, base_url="https://api.anthropic.com/v1/"
-        )
+        self.async_client.base_url = "https://api.anthropic.com/v1/"
+
 
     @property
     def supports_caching(self) -> bool:
