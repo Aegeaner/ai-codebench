@@ -24,10 +24,10 @@ providers:
     code_model: "deepseek-reasoner"
 
   gemini:
-    # Available models: gemini-2.5-flash-preview-05-20
-    default_model: "gemini-2.5-flash-preview-05-20"
-    knowledge_model: "gemini-2.5-flash-preview-05-20"
-    code_model: "gemini-2.5-flash-preview-05-20"
+    # Available models: gemini-flash-latest
+    default_model: "gemini-flash-latest"
+    knowledge_model: "gemini-flash-latest"
+    code_model: "gemini-3-pro-preview"
 
   kimi:
     # Available models: kimi-k2-turbo-preview

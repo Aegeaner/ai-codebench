@@ -26,7 +26,7 @@ class Provider(Enum):
 DEFAULT_MODELS = {
     Provider.CLAUDE: "claude-sonnet-4-20250514",
     Provider.DEEPSEEK: "deepseek-chat",
-    Provider.GEMINI: "gemini-2.5-flash-preview-05-20",
+    Provider.GEMINI: "gemini-flash-latest",
     Provider.OPENROUTER: "openai/gpt-4o",
     Provider.KIMI: "kimi-k2-thinking",
 }
