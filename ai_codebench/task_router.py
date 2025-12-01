@@ -21,13 +21,17 @@ class TaskRouter:
 
         # Use preferred provider if specified and available
         if preferred_provider:
-            provider_instance = self.provider_manager.get_provider(preferred_provider)
+            provider_instance = self.provider_manager.get_provider(
+                preferred_provider, task_type=task_type
+            )
             if provider_instance:
                 return provider_instance
 
         # Get default provider for task type
         default_provider_type = self.config.get_provider_for_task(task_type)
-        default_provider_instance = self.provider_manager.get_provider(default_provider_type)
+        default_provider_instance = self.provider_manager.get_provider(
+            default_provider_type, task_type=task_type
+        )
 
         if default_provider_instance:
             return default_provider_instance
@@ -36,7 +40,9 @@ class TaskRouter:
         available_provider_types = self.provider_manager.get_available_providers()
         for provider_type in self.config.settings.fallback_order:
             if provider_type in available_provider_types:
-                fallback_provider_instance = self.provider_manager.get_provider(provider_type)
+                fallback_provider_instance = self.provider_manager.get_provider(
+                    provider_type, task_type=task_type
+                )
                 if fallback_provider_instance:
                     return fallback_provider_instance
 
@@ -45,7 +51,11 @@ class TaskRouter:
     def get_available_providers(self) -> Dict[Provider, BaseProvider]:
         """Get all available providers"""
         available_types = self.provider_manager.get_available_providers()
-        return {p_type: self.provider_manager.get_provider(p_type) for p_type in available_types if self.provider_manager.get_provider(p_type) is not None}
+        return {
+            p_type: self.provider_manager.get_provider(p_type)
+            for p_type in available_types
+            if self.provider_manager.get_provider(p_type) is not None
+        }
 
     def get_provider_info(self, provider: Provider) -> Dict[str, Any]:
         """Get information about a specific provider"""

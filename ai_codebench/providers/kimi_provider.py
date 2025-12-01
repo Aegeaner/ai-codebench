@@ -10,6 +10,7 @@ class KimiProvider(OpenAICompatibleProvider):
     def __init__(
         self,
         api_key: str,
+        base_url: str,
         enable_caching: bool = True,
         default_model: Optional[str] = None,
         config: Optional[Dict] = None,
@@ -17,8 +18,12 @@ class KimiProvider(OpenAICompatibleProvider):
         model = default_model or (config.get("default_model") if config else None)
         if not model:
             raise ValueError("No default model configured for Kimi provider")
-        super().__init__(api_key, enable_caching=enable_caching, default_model=model)
-        self.async_client.base_url = "https://api.moonshot.cn/v1"
+        super().__init__(
+            api_key,
+            enable_caching=enable_caching,
+            default_model=model,
+            base_url=base_url,
+        )
 
     @property
     def supports_caching(self) -> bool:

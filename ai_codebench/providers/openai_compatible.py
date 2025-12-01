@@ -9,9 +9,9 @@ from .base import BaseProvider, Message, ChatResponse, ProviderAPIError
 class OpenAICompatibleProvider(BaseProvider):
     """Base class for OpenAI-compatible providers"""
 
-    def __init__(self, api_key: str, **kwargs):
+    def __init__(self, api_key: str, base_url: str, **kwargs):
         super().__init__(api_key, **kwargs)
-        self.async_client = openai.AsyncOpenAI(api_key=api_key)
+        self.async_client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
 
     async def chat_completion(
         self, messages: List[Message], model: Optional[str] = None, **kwargs
@@ -50,7 +50,7 @@ class OpenAICompatibleProvider(BaseProvider):
                     # This is a simplification; actual usage might come at the end of the stream
                     # For now, we'll yield if available, but real-world might need aggregation
                     usage = self._extract_usage_stats(chunk)
-                    if usage: # Only yield if there's actual usage data
+                    if usage:  # Only yield if there's actual usage data
                         yield {"usage": usage}
         except (APIStatusError, APITimeoutError, APIConnectionError, Exception) as e:
             yield {"error": f"OpenAI-compatible streaming API error: {e}"}

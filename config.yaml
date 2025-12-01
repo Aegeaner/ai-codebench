@@ -12,28 +12,37 @@ performance:
 # Provider configurations
 providers:
   claude:
-    # Available models: claude-sonnet-4-20250514, claude-3-5-haiku-20241022, claude-3-opus-20240229
-    default_model: "claude-sonnet-4-20250514"
-    knowledge_model: "claude-sonnet-4-20250514"
-    code_model: "claude-sonnet-4-20250514"
+    # Available models: claude-sonnet-4-5-20250929
+    default_model: "claude-sonnet-4-5-20250929"
+    knowledge_model: "claude-sonnet-4-5-20250929"
+    code_model: "claude-sonnet-4-5-20250929"
+    base_url: "https://api.anthropic.com/v1/"
 
   deepseek:
     # Available models: deepseek-coder, deepseek-chat
-    default_model: "deepseek-chat"
+    default_model: "deepseek-reasoner"
     knowledge_model: "deepseek-chat"
     code_model: "deepseek-reasoner"
+    base_url: "https://api.deepseek.com/v3.2_speciale_expires_on_20251215"
 
   gemini:
     # Available models: gemini-flash-latest
-    default_model: "gemini-flash-latest"
+    default_model: "gemini-3-pro-preview"
     knowledge_model: "gemini-flash-latest"
     code_model: "gemini-3-pro-preview"
+    base_url: "https://generativelanguage.googleapis.com/v1beta" # Example for Google API
 
   kimi:
     # Available models: kimi-k2-turbo-preview
     default_model: "kimi-k2-thinking"
     knowledge_model: "kimi-k2-turbo-preview"
     code_model: "kimi-k2-thinking"
+    base_url: "https://api.moonshot.cn/v1"
+
+  openrouter:
+    # Available models: openai/gpt-4o
+    default_model: "openai/gpt-4o"
+    base_url: "https://openrouter.ai/api/v1"
 
 # Task routing preferences
 task_routing:

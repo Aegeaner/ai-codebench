@@ -24,7 +24,7 @@ class Provider(Enum):
 
 # Default models for each provider
 DEFAULT_MODELS = {
-    Provider.CLAUDE: "claude-sonnet-4-20250514",
+    Provider.CLAUDE: "claude-sonnet-4-5-20250929",
     Provider.DEEPSEEK: "deepseek-chat",
     Provider.GEMINI: "gemini-flash-latest",
     Provider.OPENROUTER: "openai/gpt-4o",
@@ -39,6 +39,7 @@ class ProviderConfig:
     default_model: str
     knowledge_model: str
     code_model: str
+    base_url: str
     models: List[Dict] = field(default_factory=list)
 
 
@@ -164,6 +165,7 @@ class Settings:
                         code_model=provider_data.get(
                             "code_model", provider_data.get("default_model", "")
                         ),
+                        base_url=provider_data["base_url"],
                         models=provider_data.get("models", []),
                     )
                 except ValueError:

@@ -2,6 +2,7 @@
 
 from typing import AsyncGenerator, List, Optional
 import google.generativeai as genai
+from google.api_core.client_options import ClientOptions
 from .base import BaseProvider, Message, ChatResponse, ProviderAPIError
 
 
@@ -11,11 +12,14 @@ class GeminiProvider(BaseProvider):
     def __init__(
         self,
         api_key: str,
+        base_url: str,
         enable_caching: bool = True,
         default_model: Optional[str] = None,
     ):
         super().__init__(api_key, enable_caching, default_model)
-        genai.configure(api_key=api_key)
+        genai.configure(
+            api_key=api_key, client_options=ClientOptions(api_endpoint=base_url)
+        )
         self._model = None
 
     def _get_model(self, model_name: Optional[str] = None):
@@ -61,10 +65,9 @@ class GeminiProvider(BaseProvider):
 
             if not response.candidates or not response.candidates[0].content.parts:
                 raise ProviderAPIError("Gemini API returned empty response")
-            
+
             return ChatResponse(
-                content=response.text, 
-                usage=self._extract_usage_stats(response)
+                content=response.text, usage=self._extract_usage_stats(response)
             )
         except Exception as e:
             raise ProviderAPIError(f"Gemini API error: {e}") from e

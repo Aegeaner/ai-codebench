@@ -33,9 +33,8 @@ class ConversationHistory:
     ):
         self.window_size = window_size
         self.conversation_id = conversation_id
-        self.conversation_store = (
-            conversation_store
-            or JsonConversationStore(base_dir=Path.home() / ".ai_codebench_history")
+        self.conversation_store = conversation_store or JsonConversationStore(
+            base_dir=Path.home() / ".ai_codebench_history"
         )
         self.turns: List[ConversationTurn] = []
         self._load_session()
@@ -69,9 +68,7 @@ class ConversationHistory:
         self._save_session()
 
     def get_messages_for_api(
-        self, 
-        include_system: bool = False, 
-        task_type: Union[TaskType, None] = None
+        self, include_system: bool = False, task_type: Union[TaskType, None] = None
     ) -> List[Message]:
         """Convert conversation history to API messages format"""
         messages = []
@@ -86,7 +83,7 @@ class ConversationHistory:
             else:
                 # Default system prompt for unknown/mixed task types
                 system_content = "You are a helpful AI assistant for both knowledge learning and code tasks. For the knowledge learning task, teach the concept step by step. For the code tasks, you only need to analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code."
-                
+
             messages.append(Message(role="system", content=system_content))
 
         # Add conversation history within window, unless in CODE mode
@@ -94,7 +91,9 @@ class ConversationHistory:
             for turn in (
                 self.turns[:-1] if self.turns else []
             ):  # Exclude current turn if it exists
-                messages.append(Message(role="assistant", content=turn.assistant_message))
+                messages.append(
+                    Message(role="assistant", content=turn.assistant_message)
+                )
                 messages.append(Message(role="user", content=turn.user_message))
 
         return messages
@@ -138,9 +137,9 @@ class ConversationHistory:
         data = self.conversation_store.load_conversation(self.conversation_id)
         if data:
             self.turns = [
-                turn for turn in [
-                    ConversationTurn(**t) for t in data
-                ] if turn.usage is not None
+                turn
+                for turn in [ConversationTurn(**t) for t in data]
+                if turn.usage is not None
             ]
             if len(self.turns) > self.window_size:
                 self.turns = self.turns[-self.window_size :]
@@ -166,7 +165,7 @@ class ConversationHistory:
         for turn in self.turns:
             if not turn.usage:
                 continue
-                
+
             # Handle different provider formats
             usage = turn.usage
             if "input_tokens" in usage:  # DeepSeek format
@@ -176,9 +175,13 @@ class ConversationHistory:
                 stats["prompt_tokens"] += usage.get("prompt_tokens", 0)
                 stats["completion_tokens"] += usage.get("completion_tokens", 0)
             elif "usage_metadata" in usage:  # Gemini format
-                stats["prompt_tokens"] += usage["usage_metadata"].get("prompt_token_count", 0)
-                stats["completion_tokens"] += usage["usage_metadata"].get("candidates_token_count", 0)
-            
+                stats["prompt_tokens"] += usage["usage_metadata"].get(
+                    "prompt_token_count", 0
+                )
+                stats["completion_tokens"] += usage["usage_metadata"].get(
+                    "candidates_token_count", 0
+                )
+
             stats["total_tokens"] = stats["prompt_tokens"] + stats["completion_tokens"]
 
         return stats

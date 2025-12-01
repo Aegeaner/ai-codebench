@@ -5,8 +5,9 @@ import time
 from pathlib import Path
 from datetime import datetime, timedelta
 
+
 class AnswerArchive:
-    def __init__(self, retention_days=14, db_path='answers/answers.db'):
+    def __init__(self, retention_days=14, db_path="answers/answers.db"):
         self.retention_days = retention_days
         self.db_path = db_path
         self.lock = threading.Lock()  # For thread safety
@@ -19,10 +20,11 @@ class AnswerArchive:
         db_dir = Path(self.db_path).parent
         if not db_dir.exists():
             db_dir.mkdir(parents=True, exist_ok=True)
-            
+
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS archived_answers (
                     id INTEGER PRIMARY KEY,
                     date TEXT NOT NULL,
@@ -30,7 +32,8 @@ class AnswerArchive:
                     question TEXT NOT NULL,
                     answer TEXT NOT NULL
                 )
-            ''')
+            """
+            )
             conn.commit()
 
     def archive_old_answers(self):
@@ -56,16 +59,16 @@ class AnswerArchive:
                         self._archive_file(date_dir.name, file_path)
                         # Remove file after archiving
                         os.remove(file_path)
-                    
+
                     # Remove empty directory
                     if not any(date_dir.iterdir()):
                         os.rmdir(date_dir)
 
     def _archive_file(self, date, file_path):
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-            
+
             # Parse question and answer from file content
             if content.startswith("Q:\n"):
                 parts = content.split("\n\nA:\n", 1)
@@ -78,12 +81,15 @@ class AnswerArchive:
             # Insert into database
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    """
                     INSERT INTO archived_answers (date, filename, question, answer)
                     VALUES (?, ?, ?, ?)
-                ''', (date, file_path.name, question, answer))
+                """,
+                    (date, file_path.name, question, answer),
+                )
                 conn.commit()
-                
+
         except Exception as e:
             print(f"Error archiving {file_path}: {str(e)}")
 
@@ -93,11 +99,14 @@ class AnswerArchive:
             with self.lock:
                 with sqlite3.connect(self.db_path) as conn:
                     cursor = conn.cursor()
-                    cursor.execute('''
+                    cursor.execute(
+                        """
                         SELECT id, date, filename, question, answer 
                         FROM archived_answers 
                         WHERE question LIKE ?
-                    ''', (f'%{query}%',))
+                    """,
+                        (f"%{query}%",),
+                    )
                     results = cursor.fetchall()
         except Exception as e:
             print(f"Search error: {str(e)}")
@@ -107,16 +116,16 @@ class AnswerArchive:
         """Delete answers by their IDs atomically"""
         if not answer_ids:
             return
-            
+
         try:
             with self.lock:
                 with sqlite3.connect(self.db_path) as conn:
                     cursor = conn.cursor()
                     # Use parameterized query for safety
-                    placeholders = ','.join('?' for _ in answer_ids)
+                    placeholders = ",".join("?" for _ in answer_ids)
                     cursor.execute(
-                        f'DELETE FROM archived_answers WHERE id IN ({placeholders})',
-                        answer_ids
+                        f"DELETE FROM archived_answers WHERE id IN ({placeholders})",
+                        answer_ids,
                     )
                     conn.commit()
         except Exception as e:
@@ -124,11 +133,12 @@ class AnswerArchive:
 
     def start_periodic_archiving(self, interval=86400):  # Default: 24 hours
         self.running = True
+
         def run():
             while self.running:
                 self.archive_old_answers()
                 time.sleep(interval)
-                
+
         self.thread = threading.Thread(target=run, daemon=True)
         self.thread.start()
 

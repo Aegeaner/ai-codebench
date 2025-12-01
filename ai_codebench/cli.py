@@ -40,14 +40,13 @@ class ChatCLI:
         self.multi_mode = False  # Default to single-line mode
         self._current_stream_task: Optional[asyncio.Task] = None  # Track async tasks
         self.record_enabled = False  # For /record command
-        
+
         # Initialize answer archive with 14-day retention
         self.archive = AnswerArchive(retention_days=14)
-        
+
         # Start background archiving thread
         self.archive_thread = threading.Thread(
-            target=self.archive.start_periodic_archiving, 
-            daemon=True
+            target=self.archive.start_periodic_archiving, daemon=True
         )
         self.archive_thread.start()
 
@@ -219,30 +218,61 @@ Available Commands:
             self.console.print(
                 f"[yellow]No models for {provider.value.title()}[/yellow]"
             )
-            self.logger.warning(f"Model command failed: No models for {provider.value.title()}")
+            self.logger.warning(
+                f"Model command failed: No models for {provider.value.title()}"
+            )
             return
 
         model_table = Table(title=f"{provider.value.title()} Models")
         model_table.add_column("Name", style="cyan")
-        model_table.add_column("Supports Chat", style="green")
-        model_table.add_column("Supports Coding", style="blue")
+        model_table.add_column("Type", style="magenta")  # New column for model type
 
-        for model in models:
+        provider_config = self.config.settings.provider_configs.get(provider)
+
+        # Determine current active model based on task type
+        active_model = self.config.get_model_for_provider_and_task(
+            provider, self.current_task_type
+        )
+
+        # Collect all relevant models to display, ensuring uniqueness
+        display_models_set = set()
+        if provider_config:
+            display_models_set.add(provider_config.default_model)
+            display_models_set.add(provider_config.knowledge_model)
+            display_models_set.add(provider_config.code_model)
+            for model_dict in provider_config.models:
+                display_models_set.add(model_dict.get("name"))
+
+        # Filter out None and empty strings, then sort
+        display_models = sorted([m for m in list(display_models_set) if m])
+
+        for model_name in display_models:
+            is_knowledge_model = (
+                provider_config and model_name == provider_config.knowledge_model
+            )
+            is_code_model = provider_config and model_name == provider_config.code_model
+
+            model_type_indicator = []
+            if is_knowledge_model:
+                model_type_indicator.append("Knowledge")
+            if is_code_model:
+                model_type_indicator.append("Code")
+            if not model_type_indicator:
+                model_type_indicator.append(
+                    "Default"
+                )  # Fallback to Default if not explicitly Knowledge or Code
+
+            row_style = ""
+            if model_name == active_model:
+                row_style = "bold yellow"
+
             model_table.add_row(
-                model.get("name", "Unknown"),
-                "✅" if model["supports_chat"] else "❌",
-                "✅" if model["supports_coding"] else "❌",
+                model_name, ", ".join(model_type_indicator), style=row_style
             )
 
         self.console.print(model_table)
         self.console.print(
-            f"Default: [bold yellow]{self.config.get_default_model(provider)}[/bold yellow]"
-        )
-
-        # Show current task type and model
-        current_task_type = self.current_task_type
-        current_model = self.config.get_model_for_provider_and_task(
-            provider, current_task_type
+            f"Currently active model for '{self.current_task_type.value.title()}' tasks: [bold yellow]{active_model}[/bold yellow]"
         )
 
     def _handle_provider_command(self, command: str):
@@ -299,35 +329,56 @@ Available Commands:
             )
 
             messages = self.conversation.get_messages_for_api(
-                include_system=True,
-                task_type=self.current_task_type
+                include_system=True, task_type=self.current_task_type
             )
-            
+
             # Format user input based on task type
             if self.current_task_type == TaskType.WRITE:
                 formatted_user_input = f"Please help me polish the following English writing drafts for clarity, grammar, and natural tone. Keep the author's voice as much as possible:\n\n{user_input}"
             elif self.current_task_type == TaskType.CODE:
                 formatted_user_input = f"Please help me analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code: \n\n{user_input}"
             elif self.current_task_type == TaskType.KNOWLEDGE:
-                formatted_user_input = f"Please teach me the concept step by step: \n\n{user_input}"
+                formatted_user_input = (
+                    f"Please teach me the concept step by step: \n\n{user_input}"
+                )
             else:
                 formatted_user_input = user_input
-                
+
             messages.append(Message(role="user", content=formatted_user_input))
 
-            if self.config.enable_async_answers: # Background processing
-                self.console.print("[bold yellow]Request sent to AI. Response will be recorded in the background.[/bold yellow]")
+            if self.config.enable_async_answers:  # Background processing
+                self.console.print(
+                    "[bold yellow]Request sent to AI. Response will be recorded in the background.[/bold yellow]"
+                )
                 if self.stream_mode == "async":
-                    if provider.supports_async and hasattr(provider, "stream_completion"):
-                        asyncio.create_task(self._stream_response_and_save_background(provider, messages, model, user_input))
+                    if provider.supports_async and hasattr(
+                        provider, "stream_completion"
+                    ):
+                        asyncio.create_task(
+                            self._stream_response_and_save_background(
+                                provider, messages, model, user_input
+                            )
+                        )
                     else:
-                        asyncio.create_task(self._get_basic_response_and_save_background(provider, messages, model, user_input))
+                        asyncio.create_task(
+                            self._get_basic_response_and_save_background(
+                                provider, messages, model, user_input
+                            )
+                        )
                 else:
-                    asyncio.create_task(self._get_basic_response_and_save_background(provider, messages, model, user_input))
-            else: # Foreground processing
+                    asyncio.create_task(
+                        self._get_basic_response_and_save_background(
+                            provider, messages, model, user_input
+                        )
+                    )
+            else:  # Foreground processing
                 if self.stream_mode == "async":
-                    if provider.supports_async and hasattr(provider, "stream_completion"):
-                        await self._stream_response_and_display(provider, messages, model, user_input)
+                    if provider.supports_async and hasattr(
+                        provider, "stream_completion"
+                    ):
+                        await self._stream_response_and_display(
+                            provider, messages, model, user_input
+                        )
                     else:
                         self.console.print(
                             "[yellow]Async mode not supported by provider, falling back to sync[/yellow]"
@@ -336,7 +387,9 @@ Available Commands:
                             provider, messages, model, user_input
                         )
                 else:
-                    await self._get_basic_response_and_display(provider, messages, model, user_input)
+                    await self._get_basic_response_and_display(
+                        provider, messages, model, user_input
+                    )
 
         except Exception as e:
             self.console.print(f"[red]Error: {e}[/red]")
@@ -403,7 +456,9 @@ Available Commands:
                 # If recording is turned off, also turn off background saving
                 if self.config.enable_async_answers:
                     self.config.enable_async_answers = False
-                    self.console.print("[yellow]Background saving also disabled as recording is off[/yellow]")
+                    self.console.print(
+                        "[yellow]Background saving also disabled as recording is off[/yellow]"
+                    )
                 self.console.print("[green]Recording disabled[/green]")
             else:
                 self.console.print(
@@ -424,10 +479,14 @@ Available Commands:
             mode = parts[1].lower()
             if mode == "on":
                 if not self.record_enabled:
-                    self.console.print("[red]Cannot enable background saving: Recording is not enabled. Use /record on first.[/red]")
+                    self.console.print(
+                        "[red]Cannot enable background saving: Recording is not enabled. Use /record on first.[/red]"
+                    )
                     return
                 if self.current_task_type == TaskType.WRITE:
-                    self.console.print("[red]Cannot enable background saving for 'WRITE' task type.[/red]")
+                    self.console.print(
+                        "[red]Cannot enable background saving for 'WRITE' task type.[/red]"
+                    )
                     return
                 self.config.enable_async_answers = True
                 self.console.print("[green]Background saving enabled[/green]")
@@ -445,7 +504,6 @@ Available Commands:
         else:
             status = "on" if self.config.enable_async_answers else "off"
             self.console.print(f"Background saving is currently {status}")
-
 
     async def _stream_response_and_display(self, provider, messages, model, user_input):
         """Handle streaming response with markdown formatting"""
@@ -474,17 +532,35 @@ Available Commands:
 
                 self.console.print()
                 if self.config.enable_async_answers:
-                    task = asyncio.create_task(self._add_to_history(user_input, response_text, model, usage_data))
-                    task.add_done_callback(lambda t: self.console.print(f"[red]Background saving task error: {t.exception()}[/red]") if t.exception() else None)
-                    self.console.print("[bold yellow]Response recorded in background.[/bold yellow]")
+                    task = asyncio.create_task(
+                        self._add_to_history(
+                            user_input, response_text, model, usage_data
+                        )
+                    )
+                    task.add_done_callback(
+                        lambda t: (
+                            self.console.print(
+                                f"[red]Background saving task error: {t.exception()}[/red]"
+                            )
+                            if t.exception()
+                            else None
+                        )
+                    )
+                    self.console.print(
+                        "[bold yellow]Response recorded in background.[/bold yellow]"
+                    )
                 else:
-                    await self._add_to_history(user_input, response_text, model, usage_data)
+                    await self._add_to_history(
+                        user_input, response_text, model, usage_data
+                    )
             except Exception as e:
                 self.console.print(
                     Panel(f"Stream error: {str(e)}", title="Error", border_style="red")
                 )
 
-    async def _get_basic_response_and_display(self, provider, messages, model, user_input):
+    async def _get_basic_response_and_display(
+        self, provider, messages, model, user_input
+    ):
         """Get non-streaming response"""
         with self.console.status("[bold blue]Thinking...[/bold blue]"):
             response = await provider.chat_completion(messages, model)
@@ -503,13 +579,27 @@ Available Commands:
 
             self.console.print(Markdown(content))
             if self.config.enable_async_answers:
-                task = asyncio.create_task(self._add_to_history(user_input, content, model, usage))
-                task.add_done_callback(lambda t: self.console.print(f"[red]Background saving task error: {t.exception()}[/red]") if t.exception() else None)
-                self.console.print("[bold yellow]Response recorded in background.[/bold yellow]")
+                task = asyncio.create_task(
+                    self._add_to_history(user_input, content, model, usage)
+                )
+                task.add_done_callback(
+                    lambda t: (
+                        self.console.print(
+                            f"[red]Background saving task error: {t.exception()}[/red]"
+                        )
+                        if t.exception()
+                        else None
+                    )
+                )
+                self.console.print(
+                    "[bold yellow]Response recorded in background.[/bold yellow]"
+                )
             else:
                 await self._add_to_history(user_input, content, model, usage)
 
-    async def _stream_response_and_save_background(self, provider, messages, model, user_input):
+    async def _stream_response_and_save_background(
+        self, provider, messages, model, user_input
+    ):
         """Handle streaming response in background and save"""
         response_text = ""
         usage_data = None
@@ -519,69 +609,107 @@ Available Commands:
                     response_text += chunk["text"]
                 if "usage" in chunk:
                     usage_data = chunk["usage"]
-            task = asyncio.create_task(self._add_to_history(user_input, response_text, model, usage_data))
-            task.add_done_callback(lambda t: self.console.print(f"[red]Background saving task error: {t.exception()}[/red]") if t.exception() else None)
+            task = asyncio.create_task(
+                self._add_to_history(user_input, response_text, model, usage_data)
+            )
+            task.add_done_callback(
+                lambda t: (
+                    self.console.print(
+                        f"[red]Background saving task error: {t.exception()}[/red]"
+                    )
+                    if t.exception()
+                    else None
+                )
+            )
         except Exception as e:
             self.console.print(f"[red]Background stream error: {str(e)}[/red]")
-            task.add_done_callback(lambda t: self.console.print(f"[red]Background saving task error: {t.exception()}[/red]") if t.exception() else None)
+            task.add_done_callback(
+                lambda t: (
+                    self.console.print(
+                        f"[red]Background saving task error: {t.exception()}[/red]"
+                    )
+                    if t.exception()
+                    else None
+                )
+            )
         except Exception as e:
             self.console.print(f"[red]Background stream error: {str(e)}[/red]")
 
-    async def _get_basic_response_and_save_background(self, provider, messages, model, user_input):
+    async def _get_basic_response_and_save_background(
+        self, provider, messages, model, user_input
+    ):
         """Get non-streaming response in background and save"""
         try:
             response = await provider.chat_completion(messages, model)
-            content = response.content if hasattr(response, "content") else str(response)
+            content = (
+                response.content if hasattr(response, "content") else str(response)
+            )
             usage = response.usage if hasattr(response, "usage") else None
-            task = asyncio.create_task(self._add_to_history(user_input, content, model, usage))
-            task.add_done_callback(lambda t: self.console.print(f"[red]Background saving task error: {t.exception()}[/red]") if t.exception() else None)
+            task = asyncio.create_task(
+                self._add_to_history(user_input, content, model, usage)
+            )
+            task.add_done_callback(
+                lambda t: (
+                    self.console.print(
+                        f"[red]Background saving task error: {t.exception()}[/red]"
+                    )
+                    if t.exception()
+                    else None
+                )
+            )
         except Exception as e:
             self.console.print(f"[red]Background API error: {str(e)}[/red]")
 
     def _clean_filename(self, filename):
         """Remove newlines and trim whitespace from filename"""
-        return re.sub(r'\s+', ' ', filename).strip()
+        return re.sub(r"\s+", " ", filename).strip()
 
     def _handle_search_command(self, command: str):
         """Handle /search command to search archived answers and restore to current answers"""
         parts = command.split(maxsplit=1)
         query = parts[1] if len(parts) > 1 else ""
-        
+
         if not query:
             self.console.print(
-                Panel("Please provide a search query", title="Error", border_style="red")
+                Panel(
+                    "Please provide a search query", title="Error", border_style="red"
+                )
             )
             return
-            
+
         results = self.archive.search_answers(query)
-        
+
         if not results:
             self.console.print("[yellow]No matching results found[/yellow]")
             return
-            
+
         table = Table(title=f"Search Results for '{query}'")
         table.add_column("ID", style="cyan")
         table.add_column("Date", style="green")
         table.add_column("Question", style="yellow")
-        
+
         # Prepare to restore answers
         restored_ids = []
         current_date = datetime.now().strftime("%Y%m%d")
         answers_dir = Path("answers") / current_date
         answers_dir.mkdir(parents=True, exist_ok=True)
-        
+
         for result in results:
             answer_id, date, filename, question, answer = result
             # Shorten question for display
-            short_question = (question[:50] + '...') if len(question) > 50 else question
+            short_question = (question[:50] + "...") if len(question) > 50 else question
             table.add_row(str(answer_id), date, short_question)
-            
+
             # Generate new filename using the same format as _add_to_history
             time_str = datetime.now().strftime("%H%M")  # Only hours and minutes
-            safe_question = (question[:12] if question else "restored").replace("/", "_").replace("\\", "_")
+            safe_question = (
+                (question[:12] if question else "restored")
+                .replace("/", "_")
+                .replace("\\", "_")
+            )
             base_filename = f"{time_str}_{safe_question}.md"
             base_filename = self._clean_filename(base_filename)
-            
+
             # Handle filename conflicts with incremental suffix
             counter = 1
             new_filename = base_filename
@@ -590,24 +718,28 @@ Available Commands:
                 name_without_ext = base_filename[:-3]
                 new_filename = f"{name_without_ext}_{counter}.md"
                 counter += 1
-                
+
             filepath = answers_dir / new_filename
-            
+
             try:
                 # Write restored answer to current answers directory
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(f"Q:\n{question}\n\nA:\n{answer}\n")
                 restored_ids.append(answer_id)
             except Exception as e:
-                self.console.print(f"[red]Error restoring answer {answer_id}: {e}[/red]")
-            
+                self.console.print(
+                    f"[red]Error restoring answer {answer_id}: {e}[/red]"
+                )
+
         self.console.print(table)
         self.console.print(f"[bold green]Found {len(results)} results[/bold green]")
-        
+
         # Delete restored answers from archive
         if restored_ids:
             self.archive.delete_answers(restored_ids)
-            self.console.print(f"[green]Restored {len(restored_ids)} answers to current answers directory and removed from archive.[/green]")
+            self.console.print(
+                f"[green]Restored {len(restored_ids)} answers to current answers directory and removed from archive.[/green]"
+            )
         else:
             self.console.print("[yellow]No answers were restored[/yellow]")
 
@@ -734,7 +866,9 @@ async def async_main(
             cli.config.enable_async_answers = True
         else:
             # If background is explicitly 'on' but conditions aren't met, log a warning
-            if background and (not cli.record_enabled or cli.current_task_type == TaskType.WRITE):
+            if background and (
+                not cli.record_enabled or cli.current_task_type == TaskType.WRITE
+            ):
                 cli.console.print(
                     "[yellow]Warning: --background on ignored. Recording must be enabled and task type cannot be 'WRITE'.[/yellow]"
                 )
@@ -751,50 +885,42 @@ async def async_main(
     type=click.Path(exists=True, path_type=Path),
     help="Configuration file path",
 )
-
 @click.option(
     "--provider",
     "-p",
     type=click.Choice(["claude", "deepseek", "gemini", "openrouter", "kimi"]),
     help="Preferred provider",
 )
-
 @click.option(
     "--task",
     "-t",
     type=click.Choice(["code", "learn", "write"]),
     help="Set the initial task type (code, learn, or write)",
 )
-
 @click.option(
     "--mode",
     "-m",
-
     type=click.Choice(["sync", "async"]),
     help="Set the initial streaming mode (sync or async)",
 )
-
 @click.option(
     "--multi",
     "-M",
     type=click.Choice(["on", "off"]),
     help="Enable multi-line input mode at start (on or off)",
 )
-
 @click.option(
     "--record",
     "-r",
     type=click.Choice(["on", "off"]),
     help="Enable response recording at start (on or off)",
 )
-
 @click.option(
     "--background",
     "-b",
     type=click.Choice(["on", "off"]),
     help="Enable asynchronous answer saving at start (on or off). Requires --record on and not for WRITE tasks.",
 )
-
 def main(
     config: Optional[Path],
     provider: Optional[str],
@@ -806,11 +932,15 @@ def main(
 ):
     """AI Chat Assistant CLI"""
     # Convert multi/record/background string values to booleans
-    multi_bool = multi == 'on'
-    record_bool = record == 'on'
-    background_bool = background == 'on'
-    
-    asyncio.run(async_main(config, provider, task, mode, multi_bool, record_bool, background_bool))
+    multi_bool = multi == "on"
+    record_bool = record == "on"
+    background_bool = background == "on"
+
+    asyncio.run(
+        async_main(
+            config, provider, task, mode, multi_bool, record_bool, background_bool
+        )
+    )
 
 
 if __name__ == "__main__":

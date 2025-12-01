@@ -27,6 +27,7 @@ class ChatResponse:
 
 class ProviderAPIError(Exception):
     """Custom exception for provider API errors"""
+
     pass
 
 
@@ -62,7 +63,7 @@ class BaseProvider(ABC):
         self, messages: List[Message], model: Optional[str] = None, **kwargs
     ) -> AsyncGenerator[dict, None]:
         """Generate async streaming chat completion
-        
+
         Yields:
             dict: Contains either:
                 - 'text': str - The text chunk

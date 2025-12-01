@@ -38,7 +38,9 @@ class JsonConversationStore(ConversationStore):
                 with open(file_path, "r", encoding="utf-8") as f:
                     return json.load(f)
             except json.JSONDecodeError:
-                print(f"Warning: Could not decode JSON for conversation {conversation_id}")
+                print(
+                    f"Warning: Could not decode JSON for conversation {conversation_id}"
+                )
                 return []
         return []
 

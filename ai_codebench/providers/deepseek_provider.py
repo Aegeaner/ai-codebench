@@ -10,6 +10,7 @@ class DeepSeekProvider(OpenAICompatibleProvider):
     def __init__(
         self,
         api_key: str,
+        base_url: str,
         enable_caching: bool = True,
         default_model: Optional[str] = None,
         config: Optional[Dict] = None,
@@ -17,8 +18,12 @@ class DeepSeekProvider(OpenAICompatibleProvider):
         model = default_model or (config.get("default_model") if config else None)
         if not model:
             raise ValueError("No default model configured for DeepSeek provider")
-        super().__init__(api_key, enable_caching=enable_caching, default_model=model)
-        self.async_client.base_url = "https://api.deepseek.com/v1"
+        super().__init__(
+            api_key,
+            enable_caching=enable_caching,
+            default_model=model,
+            base_url=base_url,
+        )
 
     @property
     def supports_caching(self) -> bool:
@@ -45,7 +50,11 @@ class DeepSeekProvider(OpenAICompatibleProvider):
 
         try:
             stream = await self.async_client.chat.completions.create(
-                model=model, messages=messages_dict, stream=True, **kwargs
+                model=model,
+                messages=messages_dict,
+                extra_body={"thinking": {"type": "enabled"}},
+                stream=True,
+                **kwargs,
             )
 
             async for chunk in stream:
