@@ -40,6 +40,7 @@ class ProviderConfig:
     knowledge_model: str
     code_model: str
     base_url: str
+    max_tokens: Optional[int] = None
     models: List[Dict] = field(default_factory=list)
 
 
@@ -166,6 +167,7 @@ class Settings:
                             "code_model", provider_data.get("default_model", "")
                         ),
                         base_url=provider_data["base_url"],
+                        max_tokens=provider_data.get("max_tokens"),
                         models=provider_data.get("models", []),
                     )
                 except ValueError:

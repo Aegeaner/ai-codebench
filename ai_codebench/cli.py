@@ -346,6 +346,10 @@ Available Commands:
 
             messages.append(Message(role="user", content=formatted_user_input))
 
+            # Get max_tokens from provider config
+            provider_config = self.config.settings.provider_configs.get(self.current_provider)
+            max_tokens = provider_config.max_tokens if provider_config else None
+
             if self.config.enable_async_answers:  # Background processing
                 self.console.print(
                     "[bold yellow]Request sent to AI. Response will be recorded in the background.[/bold yellow]"
@@ -356,19 +360,19 @@ Available Commands:
                     ):
                         asyncio.create_task(
                             self._stream_response_and_save_background(
-                                provider, messages, model, user_input
+                                provider, messages, model, user_input, max_tokens=max_tokens
                             )
                         )
                     else:
                         asyncio.create_task(
                             self._get_basic_response_and_save_background(
-                                provider, messages, model, user_input
+                                provider, messages, model, user_input, max_tokens=max_tokens
                             )
                         )
                 else:
                     asyncio.create_task(
                         self._get_basic_response_and_save_background(
-                            provider, messages, model, user_input
+                            provider, messages, model, user_input, max_tokens=max_tokens
                         )
                     )
             else:  # Foreground processing
@@ -377,18 +381,18 @@ Available Commands:
                         provider, "stream_completion"
                     ):
                         await self._stream_response_and_display(
-                            provider, messages, model, user_input
+                            provider, messages, model, user_input, max_tokens=max_tokens
                         )
                     else:
                         self.console.print(
                             "[yellow]Async mode not supported by provider, falling back to sync[/yellow]"
                         )
                         await self._get_basic_response_and_display(
-                            provider, messages, model, user_input
+                            provider, messages, model, user_input, max_tokens=max_tokens
                         )
                 else:
                     await self._get_basic_response_and_display(
-                        provider, messages, model, user_input
+                        provider, messages, model, user_input, max_tokens=max_tokens
                     )
 
         except Exception as e:
@@ -505,18 +509,22 @@ Available Commands:
             status = "on" if self.config.enable_async_answers else "off"
             self.console.print(f"Background saving is currently {status}")
 
-    async def _stream_response_and_display(self, provider, messages, model, user_input):
+    async def _stream_response_and_display(self, provider, messages, model, user_input, max_tokens=None):
         """Handle streaming response with markdown formatting"""
         self.console.print(f"\n[bold blue]Assistant ({model}):[/bold blue]")
         response_text = ""
         usage_data = None
+        
+        kwargs = {}
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
 
         if self.stream_mode == "async":
             # Async mode - print chunks immediately as plain text
             try:
                 response_text = ""
                 usage_data = None
-                async for chunk in provider.stream_completion(messages, model):
+                async for chunk in provider.stream_completion(messages, model, **kwargs):
                     if isinstance(chunk, dict):
                         if "text" in chunk:
                             response_text += chunk["text"]
@@ -525,6 +533,7 @@ Available Commands:
                             usage_data = chunk["usage"]
                         if "error" in chunk:
                             self.console.print(chunk["error"], style="red")
+                            response_text += f"\n[ERROR: {chunk['error']}]"
                     else:
                         self.console.print(
                             f"[red]Invalid chunk format: {type(chunk)}[/red]"
@@ -559,11 +568,15 @@ Available Commands:
                 )
 
     async def _get_basic_response_and_display(
-        self, provider, messages, model, user_input
+        self, provider, messages, model, user_input, max_tokens=None
     ):
         """Get non-streaming response"""
+        kwargs = {}
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+
         with self.console.status("[bold blue]Thinking...[/bold blue]"):
-            response = await provider.chat_completion(messages, model)
+            response = await provider.chat_completion(messages, model, **kwargs)
             self.console.print(f"\n[bold blue]Assistant ({model}):[/bold blue]")
 
             # Handle different response formats
@@ -598,15 +611,23 @@ Available Commands:
                 await self._add_to_history(user_input, content, model, usage)
 
     async def _stream_response_and_save_background(
-        self, provider, messages, model, user_input
+        self, provider, messages, model, user_input, max_tokens=None
     ):
         """Handle streaming response in background and save"""
         response_text = ""
         usage_data = None
+        
+        kwargs = {}
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+
         try:
-            async for chunk in provider.stream_completion(messages, model):
-                if isinstance(chunk, dict) and "text" in chunk:
-                    response_text += chunk["text"]
+            async for chunk in provider.stream_completion(messages, model, **kwargs):
+                if isinstance(chunk, dict):
+                    if "text" in chunk:
+                        response_text += chunk["text"]
+                    if "error" in chunk:
+                        response_text += f"\n[ERROR: {chunk['error']}]"
                 if "usage" in chunk:
                     usage_data = chunk["usage"]
             task = asyncio.create_task(
@@ -636,11 +657,15 @@ Available Commands:
             self.console.print(f"[red]Background stream error: {str(e)}[/red]")
 
     async def _get_basic_response_and_save_background(
-        self, provider, messages, model, user_input
+        self, provider, messages, model, user_input, max_tokens=None
     ):
         """Get non-streaming response in background and save"""
+        kwargs = {}
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+
         try:
-            response = await provider.chat_completion(messages, model)
+            response = await provider.chat_completion(messages, model, **kwargs)
             content = (
                 response.content if hasattr(response, "content") else str(response)
             )
@@ -701,7 +726,7 @@ Available Commands:
             table.add_row(str(answer_id), date, short_question)
 
             # Generate new filename using the same format as _add_to_history
-            time_str = datetime.now().strftime("%H%M")  # Only hours and minutes
+            time_str = datetime.now().strftime("%H%M%S")  # Include seconds
             safe_question = (
                 (question[:12] if question else "restored")
                 .replace("/", "_")
@@ -764,7 +789,7 @@ Available Commands:
                 answers_dir.mkdir(parents=True, exist_ok=True)
 
                 # Generate filename: %H%M_{first 12 chars of user question}.md
-                time_str = datetime.now().strftime("%H%M")
+                time_str = datetime.now().strftime("%H%M%S")
                 safe_question = user_input[:12].replace("/", "_").replace("\\", "_")
                 filename = f"{time_str}_{safe_question}.md"
                 filename = self._clean_filename(filename)

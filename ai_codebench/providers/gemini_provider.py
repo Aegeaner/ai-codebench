@@ -68,7 +68,7 @@ class GeminiProvider(BaseProvider):
         try:
             # Use context caching if available and enabled
             generation_config = {
-                "max_output_tokens": kwargs.get("max_tokens", 4096),
+                "max_output_tokens": kwargs.get("max_tokens", 8192),
                 "temperature": kwargs.get("temperature", 0.7),
             }
 
@@ -123,7 +123,7 @@ class GeminiProvider(BaseProvider):
 
         try:
             generation_config = {
-                "max_output_tokens": kwargs.get("max_tokens", 4096),
+                "max_output_tokens": kwargs.get("max_tokens", 8192),
                 "temperature": kwargs.get("temperature", 0.7),
             }
 
@@ -178,9 +178,8 @@ class GeminiProvider(BaseProvider):
                                     yield {"text": text}
                             
                             # Check finish reason if text is empty/missing but candidate exists
-                            if candidate.finish_reason and candidate.finish_reason != 0: # 0 is STOP usually
-                                # If blocked by safety, it might show up here
-                                pass
+                            if candidate.finish_reason and candidate.finish_reason > 1: # 1 is STOP usually, others are errors
+                                yield {"error": f"Gemini generation stopped. Finish reason: {candidate.finish_reason}"}
 
                         usage = self._extract_usage_stats(chunk)
                         if usage:
