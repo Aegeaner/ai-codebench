@@ -324,6 +324,9 @@ Available Commands:
                 return
 
             provider = self.router.get_available_providers()[self.current_provider]
+            # Capture provider name here to ensure correct attribution in async tasks
+            provider_name = self.current_provider.value.title()
+            
             model = self.config.get_model_for_provider_and_task(
                 self.current_provider, self.current_task_type
             )
@@ -360,19 +363,19 @@ Available Commands:
                     ):
                         asyncio.create_task(
                             self._stream_response_and_save_background(
-                                provider, messages, model, user_input, max_tokens=max_tokens
+                                provider, messages, model, user_input, provider_name, max_tokens=max_tokens
                             )
                         )
                     else:
                         asyncio.create_task(
                             self._get_basic_response_and_save_background(
-                                provider, messages, model, user_input, max_tokens=max_tokens
+                                provider, messages, model, user_input, provider_name, max_tokens=max_tokens
                             )
                         )
                 else:
                     asyncio.create_task(
                         self._get_basic_response_and_save_background(
-                            provider, messages, model, user_input, max_tokens=max_tokens
+                            provider, messages, model, user_input, provider_name, max_tokens=max_tokens
                         )
                     )
             else:  # Foreground processing
@@ -381,18 +384,18 @@ Available Commands:
                         provider, "stream_completion"
                     ):
                         await self._stream_response_and_display(
-                            provider, messages, model, user_input, max_tokens=max_tokens
+                            provider, messages, model, user_input, provider_name, max_tokens=max_tokens
                         )
                     else:
                         self.console.print(
                             "[yellow]Async mode not supported by provider, falling back to sync[/yellow]"
                         )
                         await self._get_basic_response_and_display(
-                            provider, messages, model, user_input, max_tokens=max_tokens
+                            provider, messages, model, user_input, provider_name, max_tokens=max_tokens
                         )
                 else:
                     await self._get_basic_response_and_display(
-                        provider, messages, model, user_input, max_tokens=max_tokens
+                        provider, messages, model, user_input, provider_name, max_tokens=max_tokens
                     )
 
         except Exception as e:
@@ -509,7 +512,7 @@ Available Commands:
             status = "on" if self.config.enable_async_answers else "off"
             self.console.print(f"Background saving is currently {status}")
 
-    async def _stream_response_and_display(self, provider, messages, model, user_input, max_tokens=None):
+    async def _stream_response_and_display(self, provider, messages, model, user_input, provider_name, max_tokens=None):
         """Handle streaming response with markdown formatting"""
         self.console.print(f"\n[bold blue]Assistant ({model}):[/bold blue]")
         response_text = ""
@@ -543,7 +546,7 @@ Available Commands:
                 if self.config.enable_async_answers:
                     task = asyncio.create_task(
                         self._add_to_history(
-                            user_input, response_text, model, usage_data
+                            user_input, response_text, model, provider_name, usage_data
                         )
                     )
                     task.add_done_callback(
@@ -560,7 +563,7 @@ Available Commands:
                     )
                 else:
                     await self._add_to_history(
-                        user_input, response_text, model, usage_data
+                        user_input, response_text, model, provider_name, usage_data
                     )
             except Exception as e:
                 self.console.print(
@@ -568,7 +571,7 @@ Available Commands:
                 )
 
     async def _get_basic_response_and_display(
-        self, provider, messages, model, user_input, max_tokens=None
+        self, provider, messages, model, user_input, provider_name, max_tokens=None
     ):
         """Get non-streaming response"""
         kwargs = {}
@@ -593,7 +596,7 @@ Available Commands:
             self.console.print(Markdown(content))
             if self.config.enable_async_answers:
                 task = asyncio.create_task(
-                    self._add_to_history(user_input, content, model, usage)
+                    self._add_to_history(user_input, content, model, provider_name, usage)
                 )
                 task.add_done_callback(
                     lambda t: (
@@ -608,10 +611,10 @@ Available Commands:
                     "[bold yellow]Response recorded in background.[/bold yellow]"
                 )
             else:
-                await self._add_to_history(user_input, content, model, usage)
+                await self._add_to_history(user_input, content, model, provider_name, usage)
 
     async def _stream_response_and_save_background(
-        self, provider, messages, model, user_input, max_tokens=None
+        self, provider, messages, model, user_input, provider_name, max_tokens=None
     ):
         """Handle streaming response in background and save"""
         response_text = ""
@@ -631,7 +634,7 @@ Available Commands:
                 if "usage" in chunk:
                     usage_data = chunk["usage"]
             task = asyncio.create_task(
-                self._add_to_history(user_input, response_text, model, usage_data)
+                self._add_to_history(user_input, response_text, model, provider_name, usage_data)
             )
             task.add_done_callback(
                 lambda t: (
@@ -657,7 +660,7 @@ Available Commands:
             self.console.print(f"[red]Background stream error: {str(e)}[/red]")
 
     async def _get_basic_response_and_save_background(
-        self, provider, messages, model, user_input, max_tokens=None
+        self, provider, messages, model, user_input, provider_name, max_tokens=None
     ):
         """Get non-streaming response in background and save"""
         kwargs = {}
@@ -671,7 +674,7 @@ Available Commands:
             )
             usage = response.usage if hasattr(response, "usage") else None
             task = asyncio.create_task(
-                self._add_to_history(user_input, content, model, usage)
+                self._add_to_history(user_input, content, model, provider_name, usage)
             )
             task.add_done_callback(
                 lambda t: (
@@ -769,13 +772,13 @@ Available Commands:
             self.console.print("[yellow]No answers were restored[/yellow]")
 
     async def _add_to_history(
-        self, user_input: str, response: str, model: str, usage: Optional[dict] = None
+        self, user_input: str, response: str, model: str, provider_name: str, usage: Optional[dict] = None
     ):
         """Add conversation to history with API usage data"""
         self.conversation.add_turn(
             user_input,
             response,
-            self.current_provider.value.lower() if self.current_provider else "unknown",
+            provider_name.lower(),
             model,
             usage=usage,
         )
@@ -794,6 +797,10 @@ Available Commands:
                 filename = f"{time_str}_{safe_question}.md"
                 filename = self._clean_filename(filename)
                 filepath = answers_dir / filename
+
+                # Prepend the generated by line to the response for file saving
+                generated_by_line = f"（本答案由{provider_name}生成。）\n"
+                response = generated_by_line + response
 
                 # Write both question and answer in UTF-8 encoding
                 file_content = f"Q:\n{user_input}\n\nA:\n{response}\n"
