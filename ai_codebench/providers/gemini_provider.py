@@ -1,10 +1,11 @@
 """Google Gemini provider"""
 
 import asyncio
-from typing import AsyncGenerator, List, Optional
+from typing import AsyncGenerator, List, Optional, Dict, Any
 import google.generativeai as genai
 from google.api_core.client_options import ClientOptions
 from .base import BaseProvider, Message, ChatResponse, ProviderAPIError
+from ..settings import TaskType, TASK_GENERATION_CONFIG
 
 
 class GeminiProvider(BaseProvider):
@@ -46,6 +47,18 @@ class GeminiProvider(BaseProvider):
             self._current_system_instruction = system_instruction
         return self._model
 
+    def _apply_task_parameters(self, kwargs: Dict[str, Any]):
+        """Apply task-specific parameters like temperature, top_p, top_k"""
+        task = kwargs.pop("task", None)
+        if not task:
+            return
+
+        config = TASK_GENERATION_CONFIG.get(task)
+        if config:
+            kwargs.setdefault("temperature", config["temperature"])
+            kwargs.setdefault("top_p", config["top_p"])
+            kwargs.setdefault("top_k", config["top_k"])
+
     async def chat_completion(
         self, messages: List[Message], model: Optional[str] = None, **kwargs
     ) -> ChatResponse:
@@ -55,6 +68,9 @@ class GeminiProvider(BaseProvider):
             (msg.content for msg in messages if msg.role == "system"), None
         )
         model_instance = self._get_model(model, system_instruction)
+
+        # Apply task parameters
+        self._apply_task_parameters(kwargs)
 
         # Convert messages to Gemini format
         gemini_messages = []
@@ -69,8 +85,12 @@ class GeminiProvider(BaseProvider):
             # Use context caching if available and enabled
             generation_config = {
                 "max_output_tokens": kwargs.get("max_tokens", 8192),
-                "temperature": kwargs.get("temperature", 0.7),
+                "temperature": kwargs.get("temperature"),
+                "top_p": kwargs.get("top_p"),
+                "top_k": kwargs.get("top_k"),
             }
+            # Remove None values
+            generation_config = {k: v for k, v in generation_config.items() if v is not None}
 
             safety_settings = [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -114,6 +134,9 @@ class GeminiProvider(BaseProvider):
         )
         model_instance = self._get_model(model, system_instruction)
 
+        # Apply task parameters
+        self._apply_task_parameters(kwargs)
+
         gemini_messages = []
         for msg in messages:
             if msg.role == "user":
@@ -124,8 +147,12 @@ class GeminiProvider(BaseProvider):
         try:
             generation_config = {
                 "max_output_tokens": kwargs.get("max_tokens", 8192),
-                "temperature": kwargs.get("temperature", 0.7),
+                "temperature": kwargs.get("temperature"),
+                "top_p": kwargs.get("top_p"),
+                "top_k": kwargs.get("top_k"),
             }
+            # Remove None values
+            generation_config = {k: v for k, v in generation_config.items() if v is not None}
 
             safety_settings = [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},

@@ -518,7 +518,7 @@ Available Commands:
         response_text = ""
         usage_data = None
         
-        kwargs = {}
+        kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
 
@@ -574,7 +574,7 @@ Available Commands:
         self, provider, messages, model, user_input, provider_name, max_tokens=None
     ):
         """Get non-streaming response"""
-        kwargs = {}
+        kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
 
@@ -620,7 +620,7 @@ Available Commands:
         response_text = ""
         usage_data = None
         
-        kwargs = {}
+        kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
 
@@ -663,7 +663,7 @@ Available Commands:
         self, provider, messages, model, user_input, provider_name, max_tokens=None
     ):
         """Get non-streaming response in background and save"""
-        kwargs = {}
+        kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
 
@@ -783,8 +783,8 @@ Available Commands:
             usage=usage,
         )
 
-        # Save response to file if recording is enabled and not a WRITE task
-        if self.record_enabled and self.current_task_type != TaskType.WRITE:
+        # Save response to file if recording is enabled
+        if self.record_enabled:
             try:
                 # Create answers directory with date-based subdirectory
                 date_str = datetime.now().strftime("%Y%m%d")

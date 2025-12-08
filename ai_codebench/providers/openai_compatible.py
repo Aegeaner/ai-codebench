@@ -1,9 +1,10 @@
 """OpenAI-compatible provider base class"""
 
-from typing import AsyncGenerator, List, Optional
+from typing import AsyncGenerator, List, Optional, Dict, Any
 import openai
 from openai import APIStatusError, APITimeoutError, APIConnectionError
 from .base import BaseProvider, Message, ChatResponse, ProviderAPIError
+from ..settings import TaskType, TASK_GENERATION_CONFIG
 
 
 class OpenAICompatibleProvider(BaseProvider):
@@ -13,12 +14,32 @@ class OpenAICompatibleProvider(BaseProvider):
         super().__init__(api_key, **kwargs)
         self.async_client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
 
+    def _apply_task_parameters(self, kwargs: Dict[str, Any]):
+        """Apply task-specific parameters like temperature, top_p, top_k"""
+        task = kwargs.pop("task", None)
+        if not task:
+            return
+
+        config = TASK_GENERATION_CONFIG.get(task)
+        if config:
+            kwargs.setdefault("temperature", config["temperature"])
+            kwargs.setdefault("top_p", config["top_p"])
+            
+            # Use extra_body for top_k as it's not a standard parameter
+            if "extra_body" not in kwargs:
+                kwargs["extra_body"] = {}
+            
+            if isinstance(kwargs["extra_body"], dict):
+                kwargs["extra_body"].setdefault("top_k", config["top_k"])
+
     async def chat_completion(
         self, messages: List[Message], model: Optional[str] = None, **kwargs
     ) -> ChatResponse:
         """Standard async OpenAI-style chat completion"""
         model = model or self.default_model
         messages_dict = [msg.to_dict() for msg in messages]
+
+        self._apply_task_parameters(kwargs)
 
         try:
             response = await self.async_client.chat.completions.create(
@@ -37,6 +58,8 @@ class OpenAICompatibleProvider(BaseProvider):
         """Standard OpenAI-style streaming"""
         model = model or self.default_model
         messages_dict = [msg.to_dict() for msg in messages]
+
+        self._apply_task_parameters(kwargs)
 
         try:
             stream = await self.async_client.chat.completions.create(

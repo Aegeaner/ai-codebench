@@ -3,7 +3,7 @@
 import os
 import yaml
 from dataclasses import dataclass, field
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from pathlib import Path
 from enum import Enum
 
@@ -20,6 +20,14 @@ class Provider(Enum):
     GEMINI = "gemini"
     OPENROUTER = "openrouter"
     KIMI = "kimi"
+
+
+# Task-specific generation parameters
+TASK_GENERATION_CONFIG = {
+    TaskType.CODE: {"temperature": 0.0, "top_p": 1.0, "top_k": 50},
+    TaskType.KNOWLEDGE: {"temperature": 0.4, "top_p": 0.95, "top_k": 50},
+    TaskType.WRITE: {"temperature": 0.2, "top_p": 0.9, "top_k": 40},
+}
 
 
 # Default models for each provider

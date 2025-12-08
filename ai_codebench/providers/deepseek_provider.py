@@ -48,11 +48,19 @@ class DeepSeekProvider(OpenAICompatibleProvider):
         model = model or self.default_model
         messages_dict = [msg.to_dict() for msg in messages]
 
+        self._apply_task_parameters(kwargs)
+
+        # Ensure extra_body exists and add DeepSeek specific parameters
+        if "extra_body" not in kwargs:
+            kwargs["extra_body"] = {}
+        
+        if isinstance(kwargs["extra_body"], dict):
+            kwargs["extra_body"].update({"thinking": {"type": "enabled"}})
+
         try:
             stream = await self.async_client.chat.completions.create(
                 model=model,
                 messages=messages_dict,
-                extra_body={"thinking": {"type": "enabled"}},
                 stream=True,
                 **kwargs,
             )
