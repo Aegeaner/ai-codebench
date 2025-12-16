@@ -23,7 +23,7 @@ providers:
     default_model: "deepseek-reasoner"
     knowledge_model: "deepseek-chat"
     code_model: "deepseek-reasoner"
-    base_url: "https://api.deepseek.com/v3.2_speciale_expires_on_20251215"
+    base_url: "https://api.deepseek.com/"
 
   gemini:
     # Available models: gemini-flash-latest
