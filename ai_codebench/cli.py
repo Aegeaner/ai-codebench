@@ -647,15 +647,6 @@ Available Commands:
             )
         except Exception as e:
             self.console.print(f"[red]Background stream error: {str(e)}[/red]")
-            task.add_done_callback(
-                lambda t: (
-                    self.console.print(
-                        f"[red]Background saving task error: {t.exception()}[/red]"
-                    )
-                    if t.exception()
-                    else None
-                )
-            )
         except Exception as e:
             self.console.print(f"[red]Background stream error: {str(e)}[/red]")
 
