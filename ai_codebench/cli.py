@@ -140,15 +140,30 @@ Multi-provider AI assistant with model configuration support.
         parts = command.split()
         if len(parts) > 1:
             task_type = parts[1].lower()
+            new_task_type = None
+            display_name = ""
+
             if task_type in ["code", "coding"]:
-                self.current_task_type = TaskType.CODE
-                self.console.print("[green]Switched to coding tasks[/green]")
+                new_task_type = TaskType.CODE
+                display_name = "coding"
             elif task_type in ["learn", "learning", "knowledge"]:
-                self.current_task_type = TaskType.KNOWLEDGE
-                self.console.print("[green]Switched to learning tasks[/green]")
+                new_task_type = TaskType.KNOWLEDGE
+                display_name = "learning"
             elif task_type in ["write", "writing"]:
-                self.current_task_type = TaskType.WRITE
-                self.console.print("[green]Switched to writing tasks[/green]")
+                new_task_type = TaskType.WRITE
+                display_name = "writing"
+
+            if new_task_type:
+                if self.current_task_type != new_task_type:
+                    self.current_task_type = new_task_type
+                    self.conversation.clear_history()
+                    self.console.print(
+                        f"[green]Switched to {display_name} tasks[/green]"
+                    )
+                else:
+                    self.console.print(
+                        f"[yellow]Already in {display_name} tasks[/yellow]"
+                    )
             else:
                 self.console.print(
                     Panel(
