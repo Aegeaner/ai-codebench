@@ -152,6 +152,9 @@ Multi-provider AI assistant with model configuration support.
             elif task_type in ["write", "writing"]:
                 new_task_type = TaskType.WRITE
                 display_name = "writing"
+            elif task_type in ["image", "img"]:
+                new_task_type = TaskType.IMAGE
+                display_name = "image"
 
             if new_task_type:
                 if self.current_task_type != new_task_type:
@@ -180,6 +183,8 @@ Multi-provider AI assistant with model configuration support.
                 current = "learning"
             elif current_task == TaskType.WRITE:
                 current = "writing"
+            elif current_task == TaskType.IMAGE:
+                current = "image"
             else:
                 current = "unknown"
             self.console.print(f"Current task type: {current}")
@@ -210,7 +215,7 @@ Available Commands:
 - /help - Show this help message
 - /model - List available models and show current model
 - /provider [name] - Switch provider (claude/deepseek/gemini/kimi)
-- /task [type] - Switch task type (code/learning/write)
+- /task [type] - Switch task type (code/learning/write/image)
 - /stat - Show usage statistics
 - /mode [sync|async] - Set streaming mode (default: sync)
 - /multi [on/off] - Toggle multi-line input mode (default: off)
@@ -348,6 +353,8 @@ Available Commands:
                 formatted_user_input = (
                     f"Please teach me the concept step by step: \n\n{user_input}"
                 )
+            elif self.current_task_type == TaskType.IMAGE:
+                formatted_user_input = f"Generate an image based on: {user_input}"
             else:
                 formatted_user_input = user_input
 
@@ -356,6 +363,10 @@ Available Commands:
             # Get max_tokens from provider config
             provider_config = self.config.settings.provider_configs.get(self.current_provider)
             max_tokens = provider_config.max_tokens if provider_config else None
+
+            # Calculate output directory for images
+            date_str = datetime.now().strftime("%Y%m%d")
+            output_dir = Path("answers") / date_str
 
             if self.config.enable_async_answers:  # Background processing
                 self.console.print(
@@ -367,19 +378,19 @@ Available Commands:
                     ):
                         self._current_stream_task = asyncio.create_task(
                             self._stream_response_and_save_background(
-                                provider, messages, model, user_input, provider_name, max_tokens=max_tokens
+                                provider, messages, model, user_input, provider_name, max_tokens=max_tokens, output_dir=output_dir
                             )
                         )
                     else:
                         self._current_stream_task = asyncio.create_task(
                             self._get_basic_response_and_save_background(
-                                provider, messages, model, user_input, provider_name, max_tokens=max_tokens
+                                provider, messages, model, user_input, provider_name, max_tokens=max_tokens, output_dir=output_dir
                             )
                         )
                 else:
                     self._current_stream_task = asyncio.create_task(
                         self._get_basic_response_and_save_background(
-                            provider, messages, model, user_input, provider_name, max_tokens=max_tokens
+                            provider, messages, model, user_input, provider_name, max_tokens=max_tokens, output_dir=output_dir
                         )
                     )
             else:  # Foreground processing
@@ -388,18 +399,18 @@ Available Commands:
                         provider, "stream_completion"
                     ):
                         await self._stream_response_and_display(
-                            provider, messages, model, user_input, provider_name, max_tokens=max_tokens
+                            provider, messages, model, user_input, provider_name, max_tokens=max_tokens, output_dir=output_dir
                         )
                     else:
                         self.console.print(
                             "[yellow]Async mode not supported by provider, falling back to sync[/yellow]"
                         )
                         await self._get_basic_response_and_display(
-                            provider, messages, model, user_input, provider_name, max_tokens=max_tokens
+                            provider, messages, model, user_input, provider_name, max_tokens=max_tokens, output_dir=output_dir
                         )
                 else:
                     await self._get_basic_response_and_display(
-                        provider, messages, model, user_input, provider_name, max_tokens=max_tokens
+                        provider, messages, model, user_input, provider_name, max_tokens=max_tokens, output_dir=output_dir
                     )
 
         except Exception as e:
@@ -516,7 +527,7 @@ Available Commands:
             status = "on" if self.config.enable_async_answers else "off"
             self.console.print(f"Background saving is currently {status}")
 
-    async def _stream_response_and_display(self, provider, messages, model, user_input, provider_name, max_tokens=None):
+    async def _stream_response_and_display(self, provider, messages, model, user_input, provider_name, max_tokens=None, output_dir=None):
         """Handle streaming response with markdown formatting"""
         self.console.print(f"\n[bold blue]Assistant ({model}):[/bold blue]")
         response_text = ""
@@ -525,6 +536,8 @@ Available Commands:
         kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
+        if output_dir:
+            kwargs["output_dir"] = output_dir
 
         if self.stream_mode == "async":
             # Async mode - print chunks immediately as plain text
@@ -534,8 +547,11 @@ Available Commands:
                 async for chunk in provider.stream_completion(messages, model, **kwargs):
                     if isinstance(chunk, dict):
                         if "text" in chunk:
-                            response_text += chunk["text"]
-                            self.console.print(chunk["text"], end="", markup=False)
+                            text_chunk = chunk["text"]
+                            if "[Image saved to " in text_chunk:
+                                text_chunk = self._rename_image_output(text_chunk, user_input)
+                            response_text += text_chunk
+                            self.console.print(text_chunk, end="", markup=False)
                         if "usage" in chunk:
                             usage_data = chunk["usage"]
                         if "error" in chunk:
@@ -575,12 +591,14 @@ Available Commands:
                 )
 
     async def _get_basic_response_and_display(
-        self, provider, messages, model, user_input, provider_name, max_tokens=None
+        self, provider, messages, model, user_input, provider_name, max_tokens=None, output_dir=None
     ):
         """Get non-streaming response"""
         kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
+        if output_dir:
+            kwargs["output_dir"] = output_dir
 
         with self.console.status("[bold blue]Thinking...[/bold blue]"):
             response = await provider.chat_completion(messages, model, **kwargs)
@@ -597,6 +615,7 @@ Available Commands:
                 content = str(response)
                 usage = None
 
+            content = self._rename_image_output(content, user_input)
             self.console.print(Markdown(content))
             if self.config.enable_async_answers:
                 task = asyncio.create_task(
@@ -618,7 +637,7 @@ Available Commands:
                 await self._add_to_history(user_input, content, model, provider_name, usage)
 
     async def _stream_response_and_save_background(
-        self, provider, messages, model, user_input, provider_name, max_tokens=None
+        self, provider, messages, model, user_input, provider_name, max_tokens=None, output_dir=None
     ):
         """Handle streaming response in background and save"""
         response_text = ""
@@ -627,12 +646,17 @@ Available Commands:
         kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
+        if output_dir:
+            kwargs["output_dir"] = output_dir
 
         try:
             async for chunk in provider.stream_completion(messages, model, **kwargs):
                 if isinstance(chunk, dict):
                     if "text" in chunk:
-                        response_text += chunk["text"]
+                        text_chunk = chunk["text"]
+                        if "[Image saved to " in text_chunk:
+                            text_chunk = self._rename_image_output(text_chunk, user_input)
+                        response_text += text_chunk
                     if "error" in chunk:
                         response_text += f"\n[ERROR: {chunk['error']}]"
                 if "usage" in chunk:
@@ -655,18 +679,21 @@ Available Commands:
             self.console.print(f"[red]Background stream error: {str(e)}[/red]")
 
     async def _get_basic_response_and_save_background(
-        self, provider, messages, model, user_input, provider_name, max_tokens=None
+        self, provider, messages, model, user_input, provider_name, max_tokens=None, output_dir=None
     ):
         """Get non-streaming response in background and save"""
         kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
+        if output_dir:
+            kwargs["output_dir"] = output_dir
 
         try:
             response = await provider.chat_completion(messages, model, **kwargs)
             content = (
                 response.content if hasattr(response, "content") else str(response)
             )
+            content = self._rename_image_output(content, user_input)
             usage = response.usage if hasattr(response, "usage") else None
             task = asyncio.create_task(
                 self._add_to_history(user_input, content, model, provider_name, usage)
@@ -686,6 +713,35 @@ Available Commands:
     def _clean_filename(self, filename):
         """Remove newlines and trim whitespace from filename"""
         return re.sub(r"\s+", " ", filename).strip()
+
+    def _rename_image_output(self, content: str, user_input: str) -> str:
+        """Find image paths in content, rename files to match CLI format, and update content"""
+        def replace_match(match):
+            try:
+                old_path_str = match.group(1)
+                old_path = Path(old_path_str)
+                if not old_path.exists():
+                    return match.group(0)
+
+                time_str = datetime.now().strftime("%H%M%S")
+                safe_question = user_input[:12].replace("/", "_").replace("\\", "_")
+                filename_prefix = self._clean_filename(f"{time_str}_{safe_question}")
+                
+                counter = 0
+                while True:
+                    suffix = f"_{counter}" if counter > 0 else ""
+                    new_filename = f"{filename_prefix}{suffix}{old_path.suffix}"
+                    new_path = old_path.parent / new_filename
+                    if not new_path.exists():
+                        break
+                    counter += 1
+                
+                old_path.rename(new_path)
+                return f"[Image saved to {new_path}]"
+            except Exception:
+                return match.group(0)
+
+        return re.sub(r"\[Image saved to (.+?)\]", replace_match, content)
 
     def _handle_search_command(self, command: str):
         """Handle /search command to search archived answers and restore to current answers"""
@@ -779,7 +835,7 @@ Available Commands:
         )
 
         # Save response to file if recording is enabled
-        if self.record_enabled:
+        if self.record_enabled and self.current_task_type != TaskType.IMAGE:
             try:
                 # Create answers directory with date-based subdirectory
                 date_str = datetime.now().strftime("%Y%m%d")
@@ -881,7 +937,8 @@ async def async_main(
             cli.current_task_type = TaskType.KNOWLEDGE
         elif task == "write":
             cli.current_task_type = TaskType.WRITE
-
+        elif task == "image":
+            cli.current_task_type = TaskType.IMAGE
     # Set initial streaming mode if provided
     if mode:
         cli.stream_mode = mode
@@ -924,8 +981,8 @@ async def async_main(
 @click.option(
     "--task",
     "-t",
-    type=click.Choice(["code", "learn", "write"]),
-    help="Set the initial task type (code, learn, or write)",
+    type=click.Choice(["code", "learn", "write", "image"]),
+    help="Set the initial task type (code, learn, write, or image)",
 )
 @click.option(
     "--mode",

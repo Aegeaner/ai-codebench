@@ -12,6 +12,7 @@ class TaskType(Enum):
     KNOWLEDGE = "knowledge"
     CODE = "code"
     WRITE = "write"
+    IMAGE = "image"
 
 
 class Provider(Enum):
@@ -27,6 +28,7 @@ TASK_GENERATION_CONFIG = {
     TaskType.CODE: {"temperature": 0.0, "top_p": 1.0, "top_k": 50},
     TaskType.KNOWLEDGE: {"temperature": 0.4, "top_p": 0.95, "top_k": 50},
     TaskType.WRITE: {"temperature": 0.2, "top_p": 0.9, "top_k": 40},
+    TaskType.IMAGE: {"temperature": 1.0, "top_p": 0.95, "top_k": 40},
 }
 
 
@@ -35,6 +37,13 @@ SYSTEM_PROMPTS = {
     TaskType.KNOWLEDGE: "You are a helpful AI assistant for knowledge learning. Teach the concept step by step.",
     TaskType.CODE: "You are a helpful AI assistant for code tasks. Analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code. Please respond in Simplified Chinese.",
     TaskType.WRITE: "You are a helpful AI assistant for writing instruction, who polishes English drafts for clarity, grammar, and natural tone. Keep the author's voice as much as possible.",
+    TaskType.IMAGE: """You are an image generation model specialized in creating visually striking, social-media-ready images.
+Generate a high-fidelity scene optimized for social media platforms.
+The visual style should be cinematic photography, with a natural, premium aesthetic and a sense of realism.
+Composition: clean, balanced, and immediately eye-catching, with a clear focal point and strong visual hierarchy that reads well on small screens.
+Technical quality: ultra-high detail equivalent to 2K resolution, natural high-end lighting, shallow depth of field where appropriate, and professional cinematic color grading.
+CRUCIAL CONSTRAINT: The image must contain absolutely NO text of any kind — no letters, no words, no numbers, no symbols, no logos, no captions, no watermarks, and no UI elements.
+Ensure that all surfaces, backgrounds, clothing, props, and objects are purely visual and completely free of any typography, signage, branding, or readable characters.""",
     "default": "You are a helpful AI assistant for both knowledge learning and code tasks. For the knowledge learning task, teach the concept step by step. For the code tasks, you only need to analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code.",
 }
 
@@ -48,6 +57,11 @@ DEFAULT_MODELS = {
     Provider.KIMI: "kimi-k2-thinking",
 }
 
+# Image models for each provider (if supported)
+IMAGE_MODELS = {
+    Provider.GEMINI: "gemini-3-pro-image-preview",
+}
+
 
 @dataclass
 class ProviderConfig:
@@ -57,6 +71,7 @@ class ProviderConfig:
     knowledge_model: str
     code_model: str
     base_url: str
+    image_model: str = ""
     max_tokens: Optional[int] = None
     models: List[Dict] = field(default_factory=list)
 
@@ -183,6 +198,7 @@ class Settings:
                         code_model=provider_data.get(
                             "code_model", provider_data.get("default_model", "")
                         ),
+                        image_model=provider_data.get("image_model", ""),
                         base_url=provider_data["base_url"],
                         max_tokens=provider_data.get("max_tokens"),
                         models=provider_data.get("models", []),

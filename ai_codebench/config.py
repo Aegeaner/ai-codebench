@@ -8,6 +8,7 @@ from ai_codebench.settings import (
     TaskType,
     Provider,
     DEFAULT_MODELS,
+    IMAGE_MODELS,
 )
 
 
@@ -29,6 +30,8 @@ class ApplicationConfig:
             return self.settings.knowledge_provider
         elif task_type == TaskType.CODE:
             return self.settings.code_provider
+        elif task_type == TaskType.IMAGE:
+            return Provider.GEMINI
         else:
             return self.settings.knowledge_provider  # Fallback
 
@@ -37,6 +40,12 @@ class ApplicationConfig:
     ) -> str:
         """Get the configured model for a provider and task type"""
         provider_config = self.settings.provider_configs.get(provider)
+        
+        if task_type == TaskType.IMAGE:
+            if provider_config and provider_config.image_model:
+                return provider_config.image_model
+            return IMAGE_MODELS.get(provider, DEFAULT_MODELS.get(provider, ""))
+
         if not provider_config:
             return DEFAULT_MODELS.get(provider, "")
 
@@ -60,6 +69,7 @@ class ApplicationConfig:
                 provider_config.default_model,
                 provider_config.knowledge_model,
                 provider_config.code_model,
+                provider_config.image_model,
             }:
                 if model_name and model_name not in all_models:
                     all_models[model_name] = {"name": model_name}
@@ -69,6 +79,7 @@ class ApplicationConfig:
                     "name": model["name"],
                     "supports_chat": model["name"] == provider_config.knowledge_model,
                     "supports_coding": model["name"] == provider_config.code_model,
+                    "supports_image": model["name"] == provider_config.image_model,
                 }
                 for model in all_models.values()
             ]

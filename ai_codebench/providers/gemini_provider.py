@@ -1,5 +1,9 @@
 """Google Gemini provider using the new google-genai SDK"""
 
+import os
+import mimetypes
+import time
+from pathlib import Path
 from typing import AsyncGenerator, List, Optional, Dict, Any
 from google import genai
 from google.genai import types
@@ -46,15 +50,15 @@ class GeminiProvider(BaseProvider):
             http_options=http_options
         )
 
-    def _apply_task_parameters(self, kwargs: Dict[str, Any], model_name: str):
+    def _apply_task_parameters(self, kwargs: Dict[str, Any], model_name: str) -> Optional[TaskType]:
         """Apply task-specific parameters like temperature, top_p, top_k, and thinking_level"""
         task = kwargs.pop("task", None)
         if not task:
-            return
+            return None
 
         # Set thinking_level based on task for Gemini 3 models
         is_gemini_3 = "gemini-3" in model_name.lower()
-        if is_gemini_3:
+        if is_gemini_3 and task != TaskType.IMAGE:
             if task == TaskType.CODE:
                 kwargs["thinking_level"] = "high"
             else:
@@ -71,8 +75,10 @@ class GeminiProvider(BaseProvider):
                 
             kwargs.setdefault("top_p", config["top_p"])
             kwargs.setdefault("top_k", config["top_k"])
+        
+        return task
 
-    def _get_generation_config(self, model_name: str, **kwargs) -> types.GenerateContentConfig:
+    def _get_generation_config(self, model_name: str, task: Optional[TaskType] = None, **kwargs) -> types.GenerateContentConfig:
         """Create GenerateContentConfig from kwargs"""
         is_gemini_3 = "gemini-3" in model_name.lower()
         
@@ -86,12 +92,23 @@ class GeminiProvider(BaseProvider):
                      thinking_level=thinking_level
                  )
 
+        response_modalities = None
+        image_config = None
+        if task == TaskType.IMAGE:
+            response_modalities = ["IMAGE", "TEXT"]
+            image_config = types.ImageConfig(
+                image_size=kwargs.get("image_size", "2K"),
+                aspect_ratio=kwargs.get("aspect_ratio", "4:5")
+            )
+
         return types.GenerateContentConfig(
             temperature=kwargs.get("temperature"),
             top_p=kwargs.get("top_p"),
             top_k=kwargs.get("top_k"),
             max_output_tokens=kwargs.get("max_tokens", 8192),
             thinking_config=thinking_config,
+            response_modalities=response_modalities,
+            image_config=image_config,
             safety_settings=[
                 types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
                 types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
@@ -112,7 +129,7 @@ class GeminiProvider(BaseProvider):
         )
         
         # Apply task parameters
-        self._apply_task_parameters(kwargs, model_name)
+        task = self._apply_task_parameters(kwargs, model_name)
 
         # Convert messages to Gemini format (Content objects)
         contents = []
@@ -122,7 +139,7 @@ class GeminiProvider(BaseProvider):
             elif msg.role == "assistant":
                 contents.append(types.Content(role="model", parts=[types.Part.from_text(text=msg.content)]))
 
-        config = self._get_generation_config(model_name, **kwargs)
+        config = self._get_generation_config(model_name, task=task, **kwargs)
         if system_instruction:
             config.system_instruction = system_instruction
 
@@ -136,8 +153,33 @@ class GeminiProvider(BaseProvider):
             if not response.candidates or not response.candidates[0].content.parts:
                 raise ProviderAPIError("Gemini API returned empty response")
 
+            full_text = ""
+            file_index = 0
+            output_dir = kwargs.get("output_dir", Path("."))
+            if isinstance(output_dir, str):
+                output_dir = Path(output_dir)
+            
+            # Ensure output directory exists
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            for part in response.candidates[0].content.parts:
+                if part.text:
+                    full_text += part.text
+                elif part.inline_data:
+                    inline_data = part.inline_data
+                    file_extension = mimetypes.guess_extension(inline_data.mime_type) or ".png"
+                    
+                    # Generate filename with timestamp
+                    file_name = f"image_{int(time.time())}_{file_index}{file_extension}"
+                    file_path = output_dir / file_name
+                    
+                    with open(file_path, "wb") as f:
+                        f.write(inline_data.data)
+                    full_text += f"\n[Image saved to {file_path}]\n"
+                    file_index += 1
+
             return ChatResponse(
-                content=response.text, usage=self._extract_usage_stats(response)
+                content=full_text, usage=self._extract_usage_stats(response)
             )
         except Exception as e:
             raise ProviderAPIError(f"Gemini API error: {e}") from e
@@ -154,7 +196,7 @@ class GeminiProvider(BaseProvider):
         )
         
         # Apply task parameters
-        self._apply_task_parameters(kwargs, model_name)
+        task = self._apply_task_parameters(kwargs, model_name)
 
         contents = []
         for msg in messages:
@@ -163,7 +205,7 @@ class GeminiProvider(BaseProvider):
             elif msg.role == "assistant":
                 contents.append(types.Content(role="model", parts=[types.Part.from_text(text=msg.content)]))
 
-        config = self._get_generation_config(model_name, **kwargs)
+        config = self._get_generation_config(model_name, task=task, **kwargs)
         if system_instruction:
             config.system_instruction = system_instruction
 
@@ -174,15 +216,35 @@ class GeminiProvider(BaseProvider):
                 config=config,
             )
 
+            file_index = 0
+            output_dir = kwargs.get("output_dir", Path("."))
+            if isinstance(output_dir, str):
+                output_dir = Path(output_dir)
+            
+            # Ensure output directory exists
+            output_dir.mkdir(parents=True, exist_ok=True)
+
             async for chunk in response_stream:
                 if chunk:
                     try:
                         if chunk.candidates:
                             candidate = chunk.candidates[0]
                             if candidate.content and candidate.content.parts:
-                                text = candidate.content.parts[0].text
-                                if text:
-                                    yield {"text": text}
+                                for part in candidate.content.parts:
+                                    if part.text:
+                                        yield {"text": part.text}
+                                    elif part.inline_data:
+                                        inline_data = part.inline_data
+                                        file_extension = mimetypes.guess_extension(inline_data.mime_type) or ".png"
+                                        
+                                        # Generate filename with timestamp
+                                        file_name = f"image_{int(time.time())}_{file_index}{file_extension}"
+                                        file_path = output_dir / file_name
+                                        
+                                        with open(file_path, "wb") as f:
+                                            f.write(inline_data.data)
+                                        yield {"text": f"\n[Image saved to {file_path}]\n"}
+                                        file_index += 1
                             
                             # Check finish reason
                             if candidate.finish_reason and candidate.finish_reason != "STOP":
