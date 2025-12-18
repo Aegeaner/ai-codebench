@@ -19,9 +19,9 @@ from rich.table import Table
 from .config import ApplicationConfig
 from .conversation import ConversationHistory
 from .task_router import TaskRouter
-from .providers.base import Message, ProviderAPIError
+from .providers.base import Message
 from .settings import TaskType, Provider
-from .logger import setup_logging, get_logger
+from .logger import get_logger
 
 
 class ChatCLI:
@@ -243,47 +243,36 @@ Available Commands:
         model_table.add_column("Type", style="magenta")  # New column for model type
 
         provider_config = self.config.settings.provider_configs.get(provider)
-
-        # Determine current active model based on task type
         active_model = self.config.get_model_for_provider_and_task(
             provider, self.current_task_type
         )
 
-        # Collect all relevant models to display, ensuring uniqueness
+        # Collect unique models
         display_models_set = set()
         if provider_config:
-            display_models_set.add(provider_config.default_model)
-            display_models_set.add(provider_config.knowledge_model)
-            display_models_set.add(provider_config.code_model)
+            display_models_set.update(
+                filter(None, [
+                    provider_config.default_model,
+                    provider_config.knowledge_model,
+                    provider_config.code_model
+                ])
+            )
             for model_dict in provider_config.models:
-                display_models_set.add(model_dict.get("name"))
+                if name := model_dict.get("name"):
+                    display_models_set.add(name)
 
-        # Filter out None and empty strings, then sort
-        display_models = sorted([m for m in list(display_models_set) if m])
-
-        for model_name in display_models:
-            is_knowledge_model = (
-                provider_config and model_name == provider_config.knowledge_model
-            )
-            is_code_model = provider_config and model_name == provider_config.code_model
-
-            model_type_indicator = []
-            if is_knowledge_model:
-                model_type_indicator.append("Knowledge")
-            if is_code_model:
-                model_type_indicator.append("Code")
-            if not model_type_indicator:
-                model_type_indicator.append(
-                    "Default"
-                )  # Fallback to Default if not explicitly Knowledge or Code
-
-            row_style = ""
-            if model_name == active_model:
-                row_style = "bold yellow"
-
-            model_table.add_row(
-                model_name, ", ".join(model_type_indicator), style=row_style
-            )
+        for model_name in sorted(display_models_set):
+            types = []
+            if provider_config:
+                if model_name == provider_config.knowledge_model:
+                    types.append("Knowledge")
+                if model_name == provider_config.code_model:
+                    types.append("Code")
+            
+            type_str = ", ".join(types) if types else "Default"
+            style = "bold yellow" if model_name == active_model else ""
+            
+            model_table.add_row(model_name, type_str, style=style)
 
         self.console.print(model_table)
         self.console.print(
@@ -376,19 +365,19 @@ Available Commands:
                     if provider.supports_async and hasattr(
                         provider, "stream_completion"
                     ):
-                        asyncio.create_task(
+                        self._current_stream_task = asyncio.create_task(
                             self._stream_response_and_save_background(
                                 provider, messages, model, user_input, provider_name, max_tokens=max_tokens
                             )
                         )
                     else:
-                        asyncio.create_task(
+                        self._current_stream_task = asyncio.create_task(
                             self._get_basic_response_and_save_background(
                                 provider, messages, model, user_input, provider_name, max_tokens=max_tokens
                             )
                         )
                 else:
-                    asyncio.create_task(
+                    self._current_stream_task = asyncio.create_task(
                         self._get_basic_response_and_save_background(
                             provider, messages, model, user_input, provider_name, max_tokens=max_tokens
                         )
@@ -822,41 +811,44 @@ Available Commands:
     async def run(self):
         """Run the interactive CLI"""
         self.display_welcome()
-        while True:
-            try:
-                if self.multi_mode:
-                    self.console.print(
-                        "\n[bold green]You[/bold green] (multi-line mode, press Enter twice to submit):"
-                    )
-                    buffer = []
-                    empty_count = 0
+        try:
+            while True:
+                try:
+                    if self.multi_mode:
+                        self.console.print(
+                            "\n[bold green]You[/bold green] (multi-line mode, press Enter twice to submit):"
+                        )
+                        buffer = []
+                        empty_count = 0
 
-                    while True:
-                        line = await asyncio.to_thread(input)
-                        if not line.strip():  # Empty or whitespace line
-                            empty_count += 1
-                            if (
-                                empty_count >= 2 and buffer
-                            ):  # Two empty lines with content
-                                break
-                        else:
-                            empty_count = 0
-                            if line.strip():  # Only add non-empty lines
-                                buffer.append(line.strip())
+                        while True:
+                            line = await asyncio.to_thread(input)
+                            if not line.strip():  # Empty or whitespace line
+                                empty_count += 1
+                                if (
+                                    empty_count >= 2 and buffer
+                                ):  # Two empty lines with content
+                                    break
+                            else:
+                                empty_count = 0
+                                if line.strip():  # Only add non-empty lines
+                                    buffer.append(line.strip())
 
-                    user_input = "\n".join(buffer)
-                else:
-                    self.console.print("\n[bold green]You[/bold green]:", end=" ")
-                    user_input = (await asyncio.to_thread(input)).strip()
+                        user_input = "\n".join(buffer)
+                    else:
+                        self.console.print("\n[bold green]You[/bold green]:", end=" ")
+                        user_input = (await asyncio.to_thread(input)).strip()
 
-                if user_input:
-                    should_continue = await self.handle_user_input(user_input)
-                    if not should_continue:
-                        break
+                    if user_input:
+                        should_continue = await self.handle_user_input(user_input)
+                        if not should_continue:
+                            break
 
-            except (KeyboardInterrupt, EOFError):
-                self.console.print("\n[green]Goodbye! 👋[/green]")
-                break
+                except (KeyboardInterrupt, EOFError):
+                    self.console.print("\n[green]Goodbye! 👋[/green]")
+                    break
+        finally:
+            self.archive.stop()
 
 
 async def async_main(

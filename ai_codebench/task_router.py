@@ -1,6 +1,6 @@
 """Task routing and provider selection logic"""
 
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from .config import ApplicationConfig
 from .provider_manager import ProviderManager
 from .providers import BaseProvider

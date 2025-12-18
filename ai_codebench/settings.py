@@ -3,7 +3,7 @@
 import os
 import yaml
 from dataclasses import dataclass, field
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List
 from pathlib import Path
 from enum import Enum
 
@@ -27,6 +27,15 @@ TASK_GENERATION_CONFIG = {
     TaskType.CODE: {"temperature": 0.0, "top_p": 1.0, "top_k": 50},
     TaskType.KNOWLEDGE: {"temperature": 0.4, "top_p": 0.95, "top_k": 50},
     TaskType.WRITE: {"temperature": 0.2, "top_p": 0.9, "top_k": 40},
+}
+
+
+# System prompts for different task types
+SYSTEM_PROMPTS = {
+    TaskType.KNOWLEDGE: "You are a helpful AI assistant for knowledge learning. Teach the concept step by step.",
+    TaskType.CODE: "You are a helpful AI assistant for code tasks. Analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code. Please respond in Simplified Chinese.",
+    TaskType.WRITE: "You are a helpful AI assistant for writing instruction, who polishes English drafts for clarity, grammar, and natural tone. Keep the author's voice as much as possible.",
+    "default": "You are a helpful AI assistant for both knowledge learning and code tasks. For the knowledge learning task, teach the concept step by step. For the code tasks, you only need to analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code.",
 }
 
 

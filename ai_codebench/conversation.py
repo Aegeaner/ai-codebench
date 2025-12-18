@@ -1,7 +1,7 @@
 """Conversation history management"""
 
 from typing import List, Dict, Any, Optional, Union
-from .settings import TaskType
+from .settings import TaskType, SYSTEM_PROMPTS
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -74,16 +74,7 @@ class ConversationHistory:
         messages = []
 
         if include_system:
-            if task_type == TaskType.KNOWLEDGE:
-                system_content = "You are a helpful AI assistant for knowledge learning. Teach the concept step by step."
-            elif task_type == TaskType.CODE:
-                system_content = "You are a helpful AI assistant for code tasks. Analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code. Please respond in Simplified Chinese."
-            elif task_type == TaskType.WRITE:
-                system_content = "You are a helpful AI assistant for writing instruction, who polishes English drafts for clarity, grammar, and natural tone. Keep the author's voice as much as possible."
-            else:
-                # Default system prompt for unknown/mixed task types
-                system_content = "You are a helpful AI assistant for both knowledge learning and code tasks. For the knowledge learning task, teach the concept step by step. For the code tasks, you only need to analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code."
-
+            system_content = SYSTEM_PROMPTS.get(task_type, SYSTEM_PROMPTS["default"])
             messages.append(Message(role="system", content=system_content))
 
         # Add conversation history within window, unless in CODE mode

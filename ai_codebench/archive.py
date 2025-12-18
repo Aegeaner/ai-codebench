@@ -1,7 +1,6 @@
 import sqlite3
 import os
 import threading
-import time
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -11,7 +10,7 @@ class AnswerArchive:
         self.retention_days = retention_days
         self.db_path = db_path
         self.lock = threading.Lock()  # For thread safety
-        self.running = False
+        self._stop_event = threading.Event()
         self.thread = None
         self._init_db()
 
@@ -44,7 +43,10 @@ class AnswerArchive:
 
             cutoff_date = datetime.now() - timedelta(days=self.retention_days)
             cutoff_date_str = cutoff_date.strftime("%Y%m%d")
+            
+            files_to_archive = []
 
+            # First pass: Collect all files to archive
             for date_dir in answers_dir.iterdir():
                 if not date_dir.is_dir():
                     continue
@@ -56,42 +58,70 @@ class AnswerArchive:
                 # Archive if directory date is older than cutoff
                 if date_dir.name < cutoff_date_str:
                     for file_path in date_dir.glob("*.md"):
-                        self._archive_file(date_dir.name, file_path)
-                        # Remove file after archiving
-                        os.remove(file_path)
+                        files_to_archive.append((date_dir.name, file_path))
 
-                    # Remove empty directory
-                    if not any(date_dir.iterdir()):
-                        os.rmdir(date_dir)
+            if not files_to_archive:
+                return
 
-    def _archive_file(self, date, file_path):
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            # Second pass: Batch insert into database
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.cursor()
+                    
+                    for date, file_path in files_to_archive:
+                        try:
+                            with open(file_path, "r", encoding="utf-8") as f:
+                                content = f.read()
 
-            # Parse question and answer from file content
-            if content.startswith("Q:\n"):
-                parts = content.split("\n\nA:\n", 1)
-                question = parts[0][3:].strip() if len(parts) > 0 else ""
-                answer = parts[1].strip() if len(parts) > 1 else ""
-            else:
-                question = ""
-                answer = content.strip()
+                            # Parse question and answer from file content
+                            if content.startswith("Q:\n"):
+                                parts = content.split("\n\nA:\n", 1)
+                                question = parts[0][3:].strip() if len(parts) > 0 else ""
+                                answer = parts[1].strip() if len(parts) > 1 else ""
+                            else:
+                                question = ""
+                                answer = content.strip()
 
-            # Insert into database
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    INSERT INTO archived_answers (date, filename, question, answer)
-                    VALUES (?, ?, ?, ?)
-                """,
-                    (date, file_path.name, question, answer),
-                )
-                conn.commit()
+                            cursor.execute(
+                                """
+                                INSERT INTO archived_answers (date, filename, question, answer)
+                                VALUES (?, ?, ?, ?)
+                                """,
+                                (date, file_path.name, question, answer),
+                            )
+                            
+                            # Remove file after successful processing
+                            # We'll remove files after commit to be safe, but here we are in a transaction.
+                            # If we want to be strictly atomic, we should only delete if commit succeeds.
+                            # For simplicity/performance in this CLI tool, we can delete after we confirm processing logic passed,
+                            # but keeping track to delete later is safer.
+                        except Exception as e:
+                            print(f"Error processing {file_path}: {str(e)}")
+                            # Skip this file but continue with others? 
+                            # If transaction fails, we shouldn't delete any files.
+                            pass
 
-        except Exception as e:
-            print(f"Error archiving {file_path}: {str(e)}")
+                    conn.commit()
+                    
+                    # Delete files only after successful commit
+                    for _, file_path in files_to_archive:
+                         try:
+                             if file_path.exists():
+                                 os.remove(file_path)
+                         except OSError:
+                             pass
+
+                    # Clean up empty directories
+                    for date_dir in answers_dir.iterdir():
+                        if date_dir.is_dir() and date_dir.name < cutoff_date_str:
+                             if not any(date_dir.iterdir()):
+                                 try:
+                                     os.rmdir(date_dir)
+                                 except OSError:
+                                     pass
+
+            except Exception as e:
+                print(f"Database error during archiving: {str(e)}")
 
     def search_answers(self, query):
         results = []
@@ -132,17 +162,18 @@ class AnswerArchive:
             print(f"Delete error: {str(e)}")
 
     def start_periodic_archiving(self, interval=86400):  # Default: 24 hours
-        self.running = True
+        self._stop_event.clear()
 
         def run():
-            while self.running:
+            while not self._stop_event.is_set():
                 self.archive_old_answers()
-                time.sleep(interval)
+                # Wait for interval or until stopped
+                self._stop_event.wait(interval)
 
         self.thread = threading.Thread(target=run, daemon=True)
         self.thread.start()
 
     def stop(self):
-        self.running = False
+        self._stop_event.set()
         if self.thread:
             self.thread.join()

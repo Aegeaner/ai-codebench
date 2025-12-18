@@ -4,7 +4,7 @@ from typing import AsyncGenerator, List, Optional, Dict, Any
 import openai
 from openai import APIStatusError, APITimeoutError, APIConnectionError
 from .base import BaseProvider, Message, ChatResponse, ProviderAPIError
-from ..settings import TaskType, TASK_GENERATION_CONFIG
+from ..settings import TASK_GENERATION_CONFIG
 
 
 class OpenAICompatibleProvider(BaseProvider):

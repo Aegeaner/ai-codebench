@@ -1,6 +1,5 @@
 """Google Gemini provider using the new google-genai SDK"""
 
-import asyncio
 from typing import AsyncGenerator, List, Optional, Dict, Any
 from google import genai
 from google.genai import types
