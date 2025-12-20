@@ -3,12 +3,14 @@
 import asyncio
 import json
 import os
+import sys
 import time
 import mimetypes
 from pathlib import Path
 from typing import AsyncGenerator, List, Optional, Dict, Any
 
-import aiohttp
+import httpx
+import aiofiles
 from tencentcloud.common import credential
 from tencentcloud.common.profile.client_profile import ClientProfile
 from tencentcloud.common.profile.http_profile import HttpProfile
@@ -16,7 +18,6 @@ from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentClo
 from tencentcloud.aiart.v20221229 import aiart_client, models
 
 from .base import BaseProvider, Message, ChatResponse, ProviderAPIError
-from ..settings import TaskType
 
 
 class HunyuanProvider(BaseProvider):
@@ -78,7 +79,7 @@ class HunyuanProvider(BaseProvider):
             resp = self.client.QueryTextToImageJob(req)
             return {
                 "status": resp.JobStatusMsg,
-                "status_code": resp.JobStatusCode, # "1": Waiting, "2": Running, "4": Failed, "5": Success
+                "status_code": str(resp.JobStatusCode), # "1": Waiting, "2": Running, "4": Failed, "5": Success
                 "result_image": resp.ResultImage,
                 "error_msg": resp.JobErrorMsg
             }
@@ -87,25 +88,58 @@ class HunyuanProvider(BaseProvider):
 
     async def _download_image(self, url: str, output_dir: Path) -> str:
         """Download image from URL and save to file"""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.read()
-                    
-                    # Guess extension or default to png (Hunyuan usually returns jpg/png)
-                    content_type = response.headers.get("content-type")
-                    ext = mimetypes.guess_extension(content_type) or ".jpg"
-                    
-                    filename = f"hunyuan_{int(time.time())}_{os.urandom(4).hex()}{ext}"
-                    file_path = output_dir / filename
-                    
-                    output_dir.mkdir(parents=True, exist_ok=True)
-                    with open(file_path, "wb") as f:
-                        f.write(data)
-                    
-                    return str(file_path)
-                else:
-                    raise ProviderAPIError(f"Failed to download image: {response.status}")
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url)
+            if response.status_code == 200:
+                data = response.content
+                
+                # Guess extension or default to png (Hunyuan usually returns jpg/png)
+                content_type = response.headers.get("content-type")
+                ext = mimetypes.guess_extension(content_type) or ".jpg"
+                
+                filename = f"hunyuan_{int(time.time())}_{os.urandom(4).hex()}{ext}"
+                file_path = output_dir / filename
+                
+                # Use asyncio.to_thread for blocking mkdir
+                await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
+                
+                # Use aiofiles for non-blocking file write
+                async with aiofiles.open(file_path, "wb") as f:
+                    await f.write(data)
+                
+                return str(file_path)
+            else:
+                raise ProviderAPIError(f"Failed to download image: {response.status_code}")
+
+    def _handle_tencent_error(self, e: TencentCloudSDKException) -> str:
+        """Map Tencent Cloud error codes to user-friendly messages"""
+        code = e.code if hasattr(e, "code") else ""
+        
+        error_map = {
+            "AuthFailure.UnauthorizedOperation": "Tencent Cloud API authorization failed. Check your CAM policy.",
+            "FailedOperation.GenerateImageFailed": "Image generation failed due to content moderation.",
+            "FailedOperation.ImageDownloadError": "Failed to download the generated image from Tencent servers.",
+            "FailedOperation.JobNotExist": "The specified job ID does not exist.",
+            "FailedOperation.RequestTimeout": "Tencent Cloud service timeout.",
+            "FailedOperation.ServerError": "Tencent Cloud internal server error.",
+            "InvalidParameterValue.TextLengthExceed": "The prompt is too long for Hunyuan AIART.",
+            "OperationDenied.ImageIllegalDetected": "The generated image was blocked by content filters.",
+            "OperationDenied.TextIllegalDetected": "The prompt was blocked by content filters.",
+            "RequestLimitExceeded": "Tencent Cloud API rate limit exceeded.",
+            "RequestLimitExceeded.JobNumExceed": "Too many concurrent tasks. Please wait and try again.",
+            "ResourceUnavailable.InArrears": "Tencent Cloud account is in arrears.",
+            "ResourceUnavailable.LowBalance": "Tencent Cloud account balance is too low.",
+            "ResourceUnavailable.NotExist": "Service not activated in Tencent Cloud console.",
+            "ResourceUnavailable.StopUsing": "Tencent Cloud account has stopped service.",
+        }
+        
+        friendly_msg = error_map.get(code)
+        if friendly_msg:
+            return f"{friendly_msg} ({code})"
+        return str(e)
 
     async def chat_completion(
         self,
@@ -114,6 +148,9 @@ class HunyuanProvider(BaseProvider):
         **kwargs
     ) -> ChatResponse:
         """Generate image from text description"""
+        # Remove task from kwargs if present (not needed for image generation but passed by router)
+        kwargs.pop("task", None)
+
         # Extract the last user message as prompt
         prompt = next(
             (msg.content for msg in reversed(messages) if msg.role == "user"), None
@@ -127,6 +164,7 @@ class HunyuanProvider(BaseProvider):
             
             # 2. Poll for results
             max_retries = 60  # 60 seconds timeout approx
+            status_code = "unknown"
             for _ in range(max_retries):
                 result = await self._query_job(job_id)
                 status_code = result["status_code"]
@@ -153,10 +191,10 @@ class HunyuanProvider(BaseProvider):
                 
                 await asyncio.sleep(1)
             
-            raise ProviderAPIError("Image generation timed out")
+            raise ProviderAPIError(f"Image generation timed out. Last status code: {status_code}")
 
         except TencentCloudSDKException as e:
-            raise ProviderAPIError(f"Tencent Cloud API error: {e}")
+            raise ProviderAPIError(self._handle_tencent_error(e))
         except Exception as e:
             raise ProviderAPIError(f"Hunyuan provider error: {e}")
 
@@ -173,6 +211,7 @@ class HunyuanProvider(BaseProvider):
             if response.usage:
                 yield {"usage": response.usage}
         except Exception as e:
+            print(f"Hunyuan Stream Error: {e}", file=sys.stderr)
             yield {"error": str(e)}
 
     @property
