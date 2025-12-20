@@ -674,9 +674,9 @@ Available Commands:
                 )
             )
         except Exception as e:
+            error_msg = f"Error: {str(e)}"
             self.console.print(f"[red]Background stream error: {str(e)}[/red]")
-        except Exception as e:
-            self.console.print(f"[red]Background stream error: {str(e)}[/red]")
+            await self._add_to_history(user_input, error_msg, model, provider_name)
 
     async def _get_basic_response_and_save_background(
         self, provider, messages, model, user_input, provider_name, max_tokens=None, output_dir=None
@@ -708,7 +708,9 @@ Available Commands:
                 )
             )
         except Exception as e:
+            error_msg = f"Error: {str(e)}"
             self.console.print(f"[red]Background API error: {str(e)}[/red]")
+            await self._add_to_history(user_input, error_msg, model, provider_name)
 
     def _clean_filename(self, filename):
         """Remove newlines and trim whitespace from filename"""
