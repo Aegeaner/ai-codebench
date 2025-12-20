@@ -3,6 +3,7 @@
 import os
 import mimetypes
 import time
+import httpx
 from pathlib import Path
 from typing import AsyncGenerator, List, Optional, Dict, Any
 from google import genai
@@ -43,6 +44,9 @@ class GeminiProvider(BaseProvider):
         http_options = {'base_url': clean_base_url}
         if api_version:
             http_options['api_version'] = api_version
+
+        # Force httpx usage to avoid "Chunk too big" error from aiohttp
+        http_options['async_client_args'] = {'transport': httpx.AsyncHTTPTransport()}
 
         # Initialize the new Google Gen AI client
         self.client = genai.Client(
@@ -197,6 +201,15 @@ class GeminiProvider(BaseProvider):
         
         # Apply task parameters
         task = self._apply_task_parameters(kwargs, model_name)
+
+        # For image generation tasks, use non-streaming mode as it's more robust
+        # Images are binary blobs that need to be fully received to be valid
+        if task == TaskType.IMAGE:
+            response = await self.chat_completion(messages, model=model, **kwargs)
+            yield {"text": response.content}
+            if response.usage:
+                yield {"usage": response.usage}
+            return
 
         contents = []
         for msg in messages:
