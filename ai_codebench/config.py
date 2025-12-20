@@ -31,7 +31,7 @@ class ApplicationConfig:
         elif task_type == TaskType.CODE:
             return self.settings.code_provider
         elif task_type == TaskType.IMAGE:
-            return Provider.GEMINI
+            return self.settings.image_provider
         else:
             return self.settings.knowledge_provider  # Fallback
 
@@ -101,6 +101,7 @@ class ApplicationConfig:
             Provider.GEMINI: self.settings.gemini_api_key,
             Provider.OPENROUTER: self.settings.openrouter_api_key,
             Provider.KIMI: self.settings.kimi_api_key,
+            Provider.HUNYUAN: self.settings.tencent_secret_id and self.settings.tencent_secret_key,
         }
         return key_map.get(provider) is not None
 

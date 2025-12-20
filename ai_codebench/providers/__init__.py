@@ -6,6 +6,7 @@ from .deepseek_provider import DeepSeekProvider
 from .gemini_provider import GeminiProvider
 from .openrouter_provider import OpenRouterProvider
 from .kimi_provider import KimiProvider
+from .hunyuan_provider import HunyuanProvider
 
 __all__ = [
     "BaseProvider",
@@ -14,4 +15,5 @@ __all__ = [
     "GeminiProvider",
     "OpenRouterProvider",
     "KimiProvider",
+    "HunyuanProvider",
 ]

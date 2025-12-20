@@ -40,6 +40,12 @@ providers:
     code_model: "kimi-k2-thinking"
     base_url: "https://api.moonshot.cn/v1"
 
+  hunyuan:
+    # Available models: hunyuan-3.0
+    default_model: "hunyuan-3.0"
+    image_model: "hunyuan-3.0"
+    base_url: "aiart.eu-frankfurt.tencentcloudapi.com"
+
   openrouter:
     # Available models: openai/gpt-4o
     default_model: "openai/gpt-4o"
@@ -50,6 +56,7 @@ task_routing:
   # Preferred provider for each task type
   knowledge_provider: "claude" # claude, deepseek, gemini, kimi
   code_provider: "deepseek" # claude, deepseek, gemini, kimi
+  image_provider: "gemini" # gemini, hunyuan
 
   # Fallback order when preferred provider is unavailable
   fallback_order:

@@ -17,6 +17,7 @@ class OpenAICompatibleProvider(BaseProvider):
     def _apply_task_parameters(self, kwargs: Dict[str, Any]):
         """Apply task-specific parameters like temperature, top_p, top_k"""
         task = kwargs.pop("task", None)
+        kwargs.pop("output_dir", None)  # Remove output_dir if present as OpenAI doesn't support it
         if not task:
             return
 

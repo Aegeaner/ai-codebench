@@ -21,6 +21,7 @@ class Provider(Enum):
     GEMINI = "gemini"
     OPENROUTER = "openrouter"
     KIMI = "kimi"
+    HUNYUAN = "hunyuan"
 
 
 # Task-specific generation parameters
@@ -112,6 +113,7 @@ DEFAULT_MODELS = {
 # Image models for each provider (if supported)
 IMAGE_MODELS = {
     Provider.GEMINI: "gemini-3-pro-image-preview",
+    Provider.HUNYUAN: "hunyuan-3.0",
 }
 
 
@@ -138,6 +140,8 @@ class Settings:
     gemini_api_key: Optional[str] = None
     kimi_api_key: Optional[str] = None
     openrouter_api_key: Optional[str] = None
+    tencent_secret_id: Optional[str] = None
+    tencent_secret_key: Optional[str] = None
 
     # Chat history settings
     history_window_size: int = 3
@@ -145,6 +149,7 @@ class Settings:
     # Model selection preferences
     knowledge_provider: Provider = Provider.CLAUDE
     code_provider: Provider = Provider.DEEPSEEK
+    image_provider: Provider = Provider.GEMINI
     fallback_order: List[Provider] = field(
         default_factory=lambda: [
             Provider.CLAUDE,
@@ -174,6 +179,8 @@ class Settings:
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         self.kimi_api_key = os.getenv("MOONSHOT_API_KEY")
+        self.tencent_secret_id = os.getenv("TENCENTCLOUD_SECRET_ID")
+        self.tencent_secret_key = os.getenv("TENCENTCLOUD_SECRET_KEY")
 
     def _load_from_env(self):
         """Override defaults from environment variables"""
@@ -278,6 +285,14 @@ class Settings:
                 except ValueError:
                     print(
                         f"Warning: Unknown code provider: {routing_config['code_provider']}"
+                    )
+
+            if "image_provider" in routing_config:
+                try:
+                    self.image_provider = Provider(routing_config["image_provider"])
+                except ValueError:
+                    print(
+                        f"Warning: Unknown image provider: {routing_config['image_provider']}"
                     )
 
             if "fallback_order" in routing_config:

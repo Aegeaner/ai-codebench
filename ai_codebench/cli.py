@@ -536,7 +536,7 @@ Available Commands:
         kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
-        if output_dir and (provider_name.lower() == "gemini" or type(provider).__name__ == "GeminiProvider"):
+        if output_dir and self.current_task_type == TaskType.IMAGE:
             kwargs["output_dir"] = output_dir
 
         if self.stream_mode == "async":
@@ -597,7 +597,7 @@ Available Commands:
         kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
-        if output_dir and (provider_name.lower() == "gemini" or type(provider).__name__ == "GeminiProvider"):
+        if output_dir and self.current_task_type == TaskType.IMAGE:
             kwargs["output_dir"] = output_dir
 
         with self.console.status("[bold blue]Thinking...[/bold blue]"):
@@ -646,7 +646,7 @@ Available Commands:
         kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
-        if output_dir and (provider_name.lower() == "gemini" or type(provider).__name__ == "GeminiProvider"):
+        if output_dir and self.current_task_type == TaskType.IMAGE:
             kwargs["output_dir"] = output_dir
 
         try:
@@ -685,7 +685,7 @@ Available Commands:
         kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
-        if output_dir and (provider_name.lower() == "gemini" or type(provider).__name__ == "GeminiProvider"):
+        if output_dir and self.current_task_type == TaskType.IMAGE:
             kwargs["output_dir"] = output_dir
 
         try:
@@ -975,7 +975,7 @@ async def async_main(
 @click.option(
     "--provider",
     "-p",
-    type=click.Choice(["claude", "deepseek", "gemini", "openrouter", "kimi"]),
+    type=click.Choice(["claude", "deepseek", "gemini", "openrouter", "kimi", "hunyuan"]),
     help="Preferred provider",
 )
 @click.option(

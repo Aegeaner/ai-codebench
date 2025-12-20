@@ -6,6 +6,7 @@ from ai_codebench.providers.base import BaseProvider
 from ai_codebench.providers.claude_provider import ClaudeProvider
 from ai_codebench.providers.deepseek_provider import DeepSeekProvider
 from ai_codebench.providers.gemini_provider import GeminiProvider
+from ai_codebench.providers.hunyuan_provider import HunyuanProvider
 from ai_codebench.providers.kimi_provider import KimiProvider
 from ai_codebench.providers.openai_compatible import OpenAICompatibleProvider
 from ai_codebench.settings import Provider, Settings, DEFAULT_MODELS, TaskType
@@ -46,7 +47,9 @@ class ProviderManager:
         """Internal method to create a provider instance."""
         default_model = self._get_default_model(provider_type, task_type)
         base_url = self._get_base_url(provider_type)
-        if not base_url:
+        
+        # Hunyuan doesn't require a configurable base_url (uses SDK default)
+        if provider_type != Provider.HUNYUAN and not base_url:
             raise ValueError(
                 f"Base URL is not configured for provider {provider_type.value}"
             )
@@ -69,6 +72,13 @@ class ProviderManager:
                 default_model=default_model,
                 base_url=base_url,
             )
+        elif provider_type == Provider.HUNYUAN and self.settings.tencent_secret_id and self.settings.tencent_secret_key:
+             return HunyuanProvider(
+                 secret_id=self.settings.tencent_secret_id,
+                 secret_key=self.settings.tencent_secret_key,
+                 base_url=base_url or "aiart.eu-frankfurt.tencentcloudapi.com",
+                 default_model=default_model,
+             )
         elif provider_type == Provider.OPENROUTER and self.settings.openrouter_api_key:
             return OpenAICompatibleProvider(
                 api_key=self.settings.openrouter_api_key,
@@ -101,6 +111,7 @@ class ProviderManager:
             Provider.GEMINI: self.settings.gemini_api_key,
             Provider.OPENROUTER: self.settings.openrouter_api_key,
             Provider.KIMI: self.settings.kimi_api_key,
+            Provider.HUNYUAN: self.settings.tencent_secret_id and self.settings.tencent_secret_key,
         }
         return key_map.get(provider) is not None
 
