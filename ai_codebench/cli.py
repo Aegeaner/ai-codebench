@@ -108,7 +108,7 @@ Multi-provider AI assistant with model configuration support.
             return False
 
         if cmd == "/model":
-            self._handle_models_command()
+            self._handle_models_command(command)
         elif cmd == "/provider":
             self._handle_provider_command(command)
         elif cmd == "/task":
@@ -213,7 +213,7 @@ Multi-provider AI assistant with model configuration support.
         help_text = """
 Available Commands:
 - /help - Show this help message
-- /model - List available models and show current model
+- /model [name] - List available models or switch to a specific model for current task
 - /provider [name] - Switch provider (claude/deepseek/gemini/kimi)
 - /task [type] - Switch task type (code/learning/write/image)
 - /stat - Show usage statistics
@@ -226,11 +226,47 @@ Available Commands:
         """
         self.console.print(Panel(help_text, title="Help", border_style="blue"))
 
-    def _handle_models_command(self):
-        """Handle /models command"""
+    def _handle_models_command(self, command: str):
+        """Handle /models command to list or switch models"""
+        parts = command.split()
         provider = self.current_provider
+        
         if not provider or not self.config.has_api_key(provider):
             self.console.print("[yellow]Select a provider first[/yellow]")
+            return
+
+        provider_config = self.config.settings.provider_configs.get(provider)
+        if not provider_config:
+             self.console.print(f"[red]Configuration not found for {provider.value.title()}[/red]")
+             return
+
+        # If a model name is provided, switch to it
+        if len(parts) > 1:
+            new_model = parts[1]
+
+            # Alias handling
+            if provider == Provider.GEMINI and new_model.lower() == "imagen":
+                new_model = "imagen-4.0-generate-001"
+
+            task_type = self.current_task_type
+            
+            if task_type == TaskType.CODE:
+                provider_config.code_model = new_model
+                type_name = "coding"
+            elif task_type == TaskType.KNOWLEDGE:
+                provider_config.knowledge_model = new_model
+                type_name = "knowledge"
+            elif task_type == TaskType.WRITE:
+                provider_config.knowledge_model = new_model # Write uses knowledge model usually, or separate if config allowed
+                type_name = "writing"
+            elif task_type == TaskType.IMAGE:
+                provider_config.image_model = new_model
+                type_name = "image"
+            else:
+                provider_config.default_model = new_model
+                type_name = "default"
+                
+            self.console.print(f"[green]Switched {provider.value.title()} {type_name} model to: {new_model}[/green]")
             return
 
         models = self.config.get_provider_models(provider)

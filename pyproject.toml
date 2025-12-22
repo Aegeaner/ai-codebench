@@ -23,9 +23,6 @@ readme = "README.md"
 license = {text = "MIT"}
 
 
-[tool.pdm]
-distribution = false
-
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["ai_codebench*"]

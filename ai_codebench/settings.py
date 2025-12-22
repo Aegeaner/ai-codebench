@@ -118,6 +118,13 @@ IMAGE_MODELS = {
     Provider.HUNYUAN: "hunyuan-3.0",
 }
 
+# Supported Imagen models for Gemini
+GEMINI_IMAGEN_MODELS = [
+    "imagen-4.0-generate-001",
+    "imagen-4.0-ultra-generate-001",
+    "imagen-4.0-fast-generate-001",
+]
+
 
 @dataclass
 class ProviderConfig:

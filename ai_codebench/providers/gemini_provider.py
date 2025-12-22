@@ -57,6 +57,9 @@ class GeminiProvider(BaseProvider):
     def _apply_task_parameters(self, kwargs: Dict[str, Any], model_name: str) -> Optional[TaskType]:
         """Apply task-specific parameters like temperature, top_p, top_k, and thinking_level"""
         task = kwargs.pop("task", None)
+        if not task and "imagen" in model_name.lower():
+            task = TaskType.IMAGE
+            
         if not task:
             return None
 
@@ -121,6 +124,60 @@ class GeminiProvider(BaseProvider):
             ]
         )
 
+    async def _generate_images(self, messages: List[Message], model_name: str, **kwargs) -> ChatResponse:
+        """Generate images using Imagen models"""
+        # Extract prompt from the last user message
+        prompt = next((msg.content for msg in reversed(messages) if msg.role == "user"), None)
+        
+        if not prompt:
+            raise ProviderAPIError("No prompt provided for image generation")
+            
+        config_args = {}
+        for key in ["number_of_images", "image_size", "aspect_ratio", "person_generation", "safety_filter_level"]:
+            if key in kwargs:
+                config_args[key] = kwargs[key]
+                
+        config = types.GenerateImagesConfig(**config_args)
+        
+        try:
+            response = await self.client.aio.models.generate_images(
+                model=model_name,
+                prompt=prompt,
+                config=config,
+            )
+            
+            full_text = ""
+            file_index = 0
+            output_dir = kwargs.get("output_dir", Path("."))
+            if isinstance(output_dir, str):
+                output_dir = Path(output_dir)
+            
+            # Ensure output directory exists
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            if response.generated_images:
+                for generated_image in response.generated_images:
+                    if generated_image.image:
+                        file_extension = ".png"
+                        file_name = f"imagen_{int(time.time())}_{file_index}{file_extension}"
+                        file_path = output_dir / file_name
+                        
+                        if hasattr(generated_image.image, "save"):
+                            generated_image.image.save(file_path)
+                        else:
+                            # Fallback if it is bytes
+                            with open(file_path, "wb") as f:
+                                f.write(generated_image.image)
+
+                        full_text += f"\n[Image saved to {file_path}]\n"
+                        file_index += 1
+
+            return ChatResponse(
+                content=full_text, usage=None
+            )
+        except Exception as e:
+            raise ProviderAPIError(f"Imagen API error: {e}") from e
+
     async def chat_completion(
         self, messages: List[Message], model: Optional[str] = None, **kwargs
     ) -> ChatResponse:
@@ -134,6 +191,10 @@ class GeminiProvider(BaseProvider):
         
         # Apply task parameters
         task = self._apply_task_parameters(kwargs, model_name)
+
+        # Check if it's an Imagen model
+        if "imagen" in model_name.lower():
+            return await self._generate_images(messages, model_name, **kwargs)
 
         # Convert messages to Gemini format (Content objects)
         contents = []
