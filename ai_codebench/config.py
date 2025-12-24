@@ -9,6 +9,7 @@ from ai_codebench.settings import (
     Provider,
     DEFAULT_MODELS,
     IMAGE_MODELS,
+    PROVIDER_MODEL_PATTERNS,
 )
 
 
@@ -23,6 +24,26 @@ class ApplicationConfig:
         """Load configuration from YAML file and environment variables"""
         settings = Settings.from_file(config_path)
         return cls(settings=settings)
+
+    def resolve_provider_for_model(self, model_name: str) -> Optional[Provider]:
+        """
+        Resolve the provider based on model name patterns.
+        
+        Complexity: O(K * L) where K is number of patterns and L is model name length.
+        Since K is very small (<20), simple linear scan with startswith is efficient.
+        For significantly larger K, a Trie or Regex-based approach would be preferred.
+        """
+        model_lower = model_name.lower()
+        
+        # Flatten structure for efficient iteration
+        # Note: This could be cached in __init__ if performance became critical,
+        # but the overhead is negligible for this scale.
+        for provider, patterns in PROVIDER_MODEL_PATTERNS.items():
+            for pattern in patterns:
+                if model_lower.startswith(pattern):
+                    return provider
+                    
+        return None
 
     def get_provider_for_task(self, task_type: TaskType) -> Provider:
         """Get the preferred provider for a given task type"""
@@ -99,6 +120,7 @@ class ApplicationConfig:
             Provider.CLAUDE: self.settings.ANTHROPIC_API_KEY,
             Provider.DEEPSEEK: self.settings.deepseek_api_key,
             Provider.GEMINI: self.settings.gemini_api_key,
+            Provider.IMAGEN: self.settings.gemini_api_key,
             Provider.OPENROUTER: self.settings.openrouter_api_key,
             Provider.KIMI: self.settings.kimi_api_key,
             Provider.HUNYUAN: self.settings.tencent_secret_id and self.settings.tencent_secret_key,

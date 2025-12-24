@@ -20,7 +20,7 @@ from .config import ApplicationConfig
 from .conversation import ConversationHistory
 from .task_router import TaskRouter
 from .providers.base import Message
-from .settings import TaskType, Provider
+from .settings import TaskType, Provider, ProviderConfig
 from .logger import get_logger
 
 
@@ -231,23 +231,57 @@ Available Commands:
         parts = command.split()
         provider = self.current_provider
         
+        # We need a provider context to list models, but if we are switching models,
+        # we might resolve the provider from the model name itself.
+        
+        # If a model name is provided, try to switch to it
+        if len(parts) > 1:
+            new_model = parts[1]
+            
+            # Global alias handling
+            if new_model.lower() == "imagen":
+                new_model = "imagen-4.0-generate-001"
+            
+            # Resolve provider from model name
+            resolved_provider = self.config.resolve_provider_for_model(new_model)
+            
+            if resolved_provider and resolved_provider != provider:
+                # If we found a matching provider, switch to it
+                if self.config.has_api_key(resolved_provider):
+                    self.current_provider = resolved_provider
+                    provider = self.current_provider
+                    
+                    # Ensure config exists for the resolved provider (creating defaults if needed)
+                    if provider not in self.config.settings.provider_configs:
+                         # Default config creation logic
+                         default_config = ProviderConfig(
+                             default_model=new_model,
+                             knowledge_model=new_model,
+                             code_model=new_model,
+                             base_url="",
+                             image_model=new_model
+                         )
+                         self.config.settings.provider_configs[provider] = default_config
+                    
+                    self.console.print(f"[green]Auto-switched to {provider.value.title()} provider[/green]")
+                else:
+                    self.console.print(f"[yellow]Model '{new_model}' requires {resolved_provider.value.title()}, but no API key is configured.[/yellow]")
+                    return
+
+        # Now check if we have a valid provider selected
         if not provider or not self.config.has_api_key(provider):
             self.console.print("[yellow]Select a provider first[/yellow]")
             return
 
         provider_config = self.config.settings.provider_configs.get(provider)
-        if not provider_config:
+        
+        # If config is missing (and wasn't created above), we can't proceed with setting the model
+        if not provider_config and len(parts) > 1:
              self.console.print(f"[red]Configuration not found for {provider.value.title()}[/red]")
              return
 
-        # If a model name is provided, switch to it
+        # If a model name is provided, finalize the switch
         if len(parts) > 1:
-            new_model = parts[1]
-
-            # Alias handling
-            if provider == Provider.GEMINI and new_model.lower() == "imagen":
-                new_model = "imagen-4.0-generate-001"
-
             task_type = self.current_task_type
             
             if task_type == TaskType.CODE:

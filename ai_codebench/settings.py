@@ -22,6 +22,7 @@ class Provider(Enum):
     OPENROUTER = "openrouter"
     KIMI = "kimi"
     HUNYUAN = "hunyuan"
+    IMAGEN = "imagen"
 
 
 # Task-specific generation parameters
@@ -30,6 +31,12 @@ TASK_GENERATION_CONFIG = {
     TaskType.KNOWLEDGE: {"temperature": 0.3, "top_p": 0.9, "top_k": 40},
     TaskType.WRITE: {"temperature": 0.2, "top_p": 0.9, "top_k": 40},
     TaskType.IMAGE: {"temperature": 1.0, "top_p": 0.95, "top_k": 40},
+}
+
+# Image generation specific configuration
+IMAGE_GENERATION_CONFIG = {
+    "image_size": "2K",
+    "aspect_ratio": "3:4",
 }
 
 
@@ -110,6 +117,7 @@ DEFAULT_MODELS = {
     Provider.GEMINI: "gemini-flash-latest",
     Provider.OPENROUTER: "openai/gpt-4o",
     Provider.KIMI: "kimi-k2-thinking",
+    Provider.IMAGEN: "imagen-4.0-generate-001",
 }
 
 # Image models for each provider (if supported)
@@ -125,6 +133,15 @@ GEMINI_IMAGEN_MODELS = [
     "imagen-4.0-fast-generate-001",
 ]
 
+# Patterns to identify provider by model name
+PROVIDER_MODEL_PATTERNS = {
+    Provider.CLAUDE: ["claude-"],
+    Provider.DEEPSEEK: ["deepseek-"],
+    Provider.GEMINI: ["gemini-"],
+    Provider.IMAGEN: ["imagen-"],
+    Provider.KIMI: ["moonshot-"],
+    Provider.HUNYUAN: ["hunyuan-"],
+}
 
 @dataclass
 class ProviderConfig:

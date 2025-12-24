@@ -6,6 +6,7 @@ from ai_codebench.providers.base import BaseProvider
 from ai_codebench.providers.claude_provider import ClaudeProvider
 from ai_codebench.providers.deepseek_provider import DeepSeekProvider
 from ai_codebench.providers.gemini_provider import GeminiProvider
+from ai_codebench.providers.imagen_provider import ImagenProvider
 from ai_codebench.providers.hunyuan_provider import HunyuanProvider
 from ai_codebench.providers.kimi_provider import KimiProvider
 from ai_codebench.providers.openai_compatible import OpenAICompatibleProvider
@@ -48,8 +49,8 @@ class ProviderManager:
         default_model = self._get_default_model(provider_type, task_type)
         base_url = self._get_base_url(provider_type)
         
-        # Hunyuan doesn't require a configurable base_url (uses SDK default)
-        if provider_type != Provider.HUNYUAN and not base_url:
+        # Hunyuan and Imagen don't strictly require a configurable base_url
+        if provider_type not in [Provider.HUNYUAN, Provider.IMAGEN] and not base_url:
             raise ValueError(
                 f"Base URL is not configured for provider {provider_type.value}"
             )
@@ -68,6 +69,13 @@ class ProviderManager:
             )
         elif provider_type == Provider.GEMINI and self.settings.gemini_api_key:
             return GeminiProvider(
+                api_key=self.settings.gemini_api_key,
+                default_model=default_model,
+                base_url=base_url,
+            )
+        elif provider_type == Provider.IMAGEN and self.settings.gemini_api_key:
+            # Imagen uses the same API key as Gemini
+            return ImagenProvider(
                 api_key=self.settings.gemini_api_key,
                 default_model=default_model,
                 base_url=base_url,
@@ -109,6 +117,7 @@ class ProviderManager:
             Provider.CLAUDE: self.settings.ANTHROPIC_API_KEY,
             Provider.DEEPSEEK: self.settings.deepseek_api_key,
             Provider.GEMINI: self.settings.gemini_api_key,
+            Provider.IMAGEN: self.settings.gemini_api_key,
             Provider.OPENROUTER: self.settings.openrouter_api_key,
             Provider.KIMI: self.settings.kimi_api_key,
             Provider.HUNYUAN: self.settings.tencent_secret_id and self.settings.tencent_secret_key,

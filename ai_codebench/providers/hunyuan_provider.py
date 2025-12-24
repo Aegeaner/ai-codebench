@@ -18,6 +18,7 @@ from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentClo
 from tencentcloud.aiart.v20221229 import aiart_client, models
 
 from .base import BaseProvider, Message, ChatResponse, ProviderAPIError
+from ..settings import IMAGE_GENERATION_CONFIG
 
 
 class HunyuanProvider(BaseProvider):
@@ -59,10 +60,23 @@ class HunyuanProvider(BaseProvider):
                 "LogoAdd": 0,  # No watermark
             }
             
-            # Apply resolution if provided, else let API default or use config
-            # Resolution format "1024:1024"
+            # Apply resolution if provided, else use config
             if "resolution" in kwargs:
                 params["Resolution"] = kwargs["resolution"]
+            else:
+                # Map generic aspect ratio to Hunyuan resolution
+                ar = IMAGE_GENERATION_CONFIG.get("aspect_ratio", "1:1")
+                # Hunyuan supports: 768:768, 1024:1024, 768:1024, 1024:768, 1280:768, 768:1280
+                # Mapping 4:5 (0.8) to closest 3:4 (0.75) -> 768:1024 or custom if supported
+                resolution_map = {
+                    "1:1": "1024:1024",
+                    "4:3": "1024:768",
+                    "3:4": "768:1024",
+                    "16:9": "1280:768",
+                    "9:16": "768:1280",
+                    "4:5": "768:1024", # Fallback to 3:4 as 4:5 isn't standard in v1
+                }
+                params["Resolution"] = resolution_map.get(ar, "1024:1024")
             
             req.from_json_string(json.dumps(params))
             resp = self.client.SubmitTextToImageJob(req)
