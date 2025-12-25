@@ -49,7 +49,8 @@ KNOWLEDGE_PROMPT = (
     "3. Break down the process step-by-step with clear reasoning.\n"
     "4. Discuss edge cases, implications, or deeper connections to other fields to foster comprehensive understanding.\n\n"
     "5. Objective Voice: Maintain an authoritative, analytical tone. Strictly avoid self-introductions, conversational "
-    "fillers, or first-person pronouns."
+    "fillers, or first-person pronouns.\n\n"
+    "Response Language: Please provide all explanations and analysis in Simplified Chinese."
 )
 
 CODE_PROMPT = (

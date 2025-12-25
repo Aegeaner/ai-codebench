@@ -908,6 +908,10 @@ Available Commands:
 
         # Save response to file if recording is enabled
         if self.record_enabled and self.current_task_type != TaskType.IMAGE:
+            if not response or not response.strip():
+                self.console.print("[red]Empty response received. Skipping file save.[/red]")
+                return
+
             try:
                 # Create answers directory with date-based subdirectory
                 date_str = datetime.now().strftime("%Y%m%d")
