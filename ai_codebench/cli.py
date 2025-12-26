@@ -214,7 +214,7 @@ Multi-provider AI assistant with model configuration support.
 Available Commands:
 - /help - Show this help message
 - /model [name] - List available models or switch to a specific model for current task
-- /provider [name] - Switch provider (claude/deepseek/gemini/kimi)
+- /provider [name] - Switch provider (claude/deepseek/gemini/openrouter/kimi/hunyuan/imagen)
 - /task [type] - Switch task type (code/learning/write/image)
 - /stat - Show usage statistics
 - /mode [sync|async] - Set streaming mode (default: sync)
@@ -1051,7 +1051,7 @@ async def async_main(
 @click.option(
     "--provider",
     "-p",
-    type=click.Choice(["claude", "deepseek", "gemini", "openrouter", "kimi", "hunyuan"]),
+    type=click.Choice(["claude", "deepseek", "gemini", "openrouter", "kimi", "hunyuan", "imagen"]),
     help="Preferred provider",
 )
 @click.option(

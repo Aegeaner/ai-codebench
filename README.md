@@ -1,10 +1,10 @@
 # AI Codebench
 
-A comprehensive CLI-based AI assistant capable of interacting with multiple AI providers including Anthropic (Claude), DeepSeek, Google Gemini, Moonshot (Kimi), and OpenRouter. Designed for coding, learning, and writing tasks with rich terminal output and extensive configuration options.
+A comprehensive CLI-based AI assistant capable of interacting with multiple AI providers including Anthropic (Claude), DeepSeek, Google Gemini, Moonshot (Kimi), OpenRouter, Tencent Hunyuan, and Google Imagen. Designed for coding, learning, and writing tasks with rich terminal output and extensive configuration options.
 
 ## Features
 
-- **Multi-Provider Support:** Seamlessly switch between Claude, DeepSeek, Gemini, Kimi, and OpenRouter.
+- **Multi-Provider Support:** Seamlessly switch between Claude, DeepSeek, Gemini, Kimi, OpenRouter, Hunyuan, and Imagen.
 - **Task-Specific Modes:** Optimized prompts and models for:
   - `code`: Algorithm analysis and coding assistance.
   - `learn`: Step-by-step concept explanations.
@@ -43,7 +43,7 @@ poetry env activate && poetry run python main.py
 
 You can pre-configure the session using flags:
 
-- `-p, --provider [claude|deepseek|gemini|openrouter|kimi]`: Set initial provider.
+- `-p, --provider [claude|deepseek|gemini|openrouter|kimi|hunyuan|imagen]`: Set initial provider.
 - `-t, --task [code|learn|write]`: Set initial task type.
 - `-m, --mode [sync|async]`: Set streaming mode.
 - `-M, --multi [on|off]`: Enable multi-line input mode.
