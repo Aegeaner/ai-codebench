@@ -1,6 +1,6 @@
 """Kimi provider using OpenAI-compatible API"""
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from .openai_compatible import OpenAICompatibleProvider
 
 
@@ -28,3 +28,14 @@ class KimiProvider(OpenAICompatibleProvider):
     @property
     def supports_caching(self) -> bool:
         return False
+
+    def _apply_task_parameters(self, kwargs: Dict[str, Any]):
+        """Apply task-specific parameters for Kimi-specific models"""
+        super()._apply_task_parameters(kwargs)
+
+        model = kwargs.get("model") or self.default_model
+        if model == "kimi-k2-thinking":
+            # Kimi K2 Thinking requirements
+            kwargs["temperature"] = 1.0
+            if kwargs.get("max_tokens", 0) < 16000:
+                kwargs["max_tokens"] = 16000
