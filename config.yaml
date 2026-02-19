@@ -27,9 +27,9 @@ providers:
 
   gemini:
     # Available models: gemini-flash-latest
-    default_model: "gemini-3-pro-preview"
-    knowledge_model: "gemini-3-pro-preview"
-    code_model: "gemini-3-pro-preview"
+    default_model: "gemini-3.1-pro-preview"
+    knowledge_model: "gemini-3.1-pro-preview"
+    code_model: "gemini-3.1-pro-preview"
     base_url: "https://generativelanguage.googleapis.com/v1beta" # Example for Google API
     max_tokens: 65536
 
