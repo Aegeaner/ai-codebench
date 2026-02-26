@@ -1,7 +1,7 @@
 """Base provider interface"""
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, AsyncGenerator
+from typing import Dict, List, Optional, AsyncGenerator, Any
 from dataclasses import dataclass
 
 
@@ -12,7 +12,7 @@ class Message:
     role: str  # "user", "assistant", "system"
     content: str
 
-    def to_dict(self) -> Dict[str, str]:
+    def to_dict(self) -> Dict[str, Any]:
         return {"role": self.role, "content": self.content}
 
 

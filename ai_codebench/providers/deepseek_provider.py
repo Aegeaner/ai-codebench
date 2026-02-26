@@ -1,7 +1,7 @@
 """DeepSeek provider using OpenAI-compatible API"""
 
-from typing import AsyncGenerator, Dict, List, Optional
-from .openai_compatible import OpenAICompatibleProvider, Message
+from typing import Dict, Optional, Any
+from .openai_compatible import OpenAICompatibleProvider
 
 
 class DeepSeekProvider(OpenAICompatibleProvider):
@@ -29,27 +29,10 @@ class DeepSeekProvider(OpenAICompatibleProvider):
     def supports_caching(self) -> bool:
         return False  # DeepSeek doesn't support context caching yet
 
-    def _extract_usage_stats(self, response: object) -> Dict[str, int]:
-        """Extract usage stats from DeepSeek API response"""
-        if not hasattr(response, "usage"):
-            return None
-
-        usage = response.usage
-        return {
-            "prompt_tokens": getattr(usage, "prompt_tokens", 0),
-            "completion_tokens": getattr(usage, "completion_tokens", 0),
-            "total_tokens": getattr(usage, "total_tokens", 0),
-        }
-
-    async def stream_completion(
-        self, messages: List[Message], model: Optional[str] = None, **kwargs
-    ) -> AsyncGenerator[dict, None]:
-        """Generate async streaming chat completion"""
-        model = model or self.default_model
-        messages_dict = [msg.to_dict() for msg in messages]
-
-        self._apply_task_parameters(kwargs)
-
+    def _apply_task_parameters(self, model: str, kwargs: Dict[str, Any]):
+        """Apply task-specific parameters for DeepSeek-specific models"""
+        super()._apply_task_parameters(model, kwargs)
+        
         # Ensure extra_body exists and add DeepSeek specific parameters
         if "extra_body" not in kwargs:
             kwargs["extra_body"] = {}
@@ -57,20 +40,14 @@ class DeepSeekProvider(OpenAICompatibleProvider):
         if isinstance(kwargs["extra_body"], dict):
             kwargs["extra_body"].update({"thinking": {"type": "enabled"}})
 
-        try:
-            stream = await self.async_client.chat.completions.create(
-                model=model,
-                messages=messages_dict,
-                stream=True,
-                **kwargs,
-            )
+    def _extract_usage_stats(self, response: object) -> Dict[str, int]:
+        """Extract usage stats from DeepSeek API response"""
+        if not hasattr(response, "usage"):
+            return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
-            async for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield {"text": chunk.choices[0].delta.content}
-                if hasattr(chunk, "usage"):
-                    usage = self._extract_usage_stats(chunk)
-                    if usage:
-                        yield {"usage": usage}
-        except Exception as e:
-            yield {"error": f"DeepSeek streaming API error: {e}"}
+        usage = response.usage
+        return {
+            "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+            "completion_tokens": getattr(usage, "completion_tokens", 0),
+            "total_tokens": getattr(usage, "total_tokens", 0),
+        }

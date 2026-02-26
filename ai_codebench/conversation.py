@@ -127,10 +127,14 @@ class ConversationHistory:
         self.turns = []  # Always start with empty turns
         data = self.conversation_store.load_conversation(self.conversation_id)
         if data:
+            import inspect
+            sig = inspect.signature(ConversationTurn)
+            valid_keys = sig.parameters.keys()
+            
             self.turns = [
-                turn
-                for turn in [ConversationTurn(**t) for t in data]
-                if turn.usage is not None
+                ConversationTurn(**{k: v for k, v in t.items() if k in valid_keys})
+                for t in data
+                if t.get("usage") is not None
             ]
             if len(self.turns) > self.window_size:
                 self.turns = self.turns[-self.window_size :]

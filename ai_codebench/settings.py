@@ -123,7 +123,7 @@ DEFAULT_MODELS = {
 
 # Image models for each provider (if supported)
 IMAGE_MODELS = {
-    Provider.GEMINI: "gemini-3-pro-image-preview",
+    Provider.GEMINI: "gemini-3.1-flash-image-preview",
     Provider.HUNYUAN: "hunyuan-3.0",
 }
 

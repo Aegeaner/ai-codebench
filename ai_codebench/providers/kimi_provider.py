@@ -29,13 +29,16 @@ class KimiProvider(OpenAICompatibleProvider):
     def supports_caching(self) -> bool:
         return False
 
-    def _apply_task_parameters(self, kwargs: Dict[str, Any]):
+    def _apply_task_parameters(self, model: str, kwargs: Dict[str, Any]):
         """Apply task-specific parameters for Kimi-specific models"""
-        super()._apply_task_parameters(kwargs)
+        super()._apply_task_parameters(model, kwargs)
 
-        model = kwargs.get("model") or self.default_model
-        if model == "kimi-k2-thinking":
-            # Kimi K2 Thinking requirements
+        if model in ["kimi-k2-thinking", "kimi-k2.5"]:
+            # Kimi Thinking series strict requirements
             kwargs["temperature"] = 1.0
-            if kwargs.get("max_tokens", 0) < 16000:
-                kwargs["max_tokens"] = 16000
+            kwargs["top_p"] = 0.95
+            
+            # Ensure sufficient max_tokens
+            current_max = kwargs.get("max_tokens", 0)
+            if current_max < 32768:
+                kwargs["max_tokens"] = 32768

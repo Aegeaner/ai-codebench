@@ -34,10 +34,10 @@ providers:
     max_tokens: 65536
 
   kimi:
-    # Available models: kimi-k2-turbo-preview
-    default_model: "kimi-k2-thinking"
+    # Available models: kimi-k2-turbo-preview, kimi-k2-thinking, kimi-k2.5
+    default_model: "kimi-k2.5"
     knowledge_model: "kimi-k2-turbo-preview"
-    code_model: "kimi-k2-thinking"
+    code_model: "kimi-k2.5"
     base_url: "https://api.moonshot.cn/v1"
 
   hunyuan:
