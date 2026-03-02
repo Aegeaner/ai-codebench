@@ -67,7 +67,7 @@ class GeminiProvider(BaseProvider):
             if task == TaskType.CODE:
                 kwargs["thinking_level"] = "high"
             else:
-                kwargs["thinking_level"] = "low"
+                kwargs["thinking_level"] = "medium"
 
         config = TASK_GENERATION_CONFIG.get(task)
         if config:
