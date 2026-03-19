@@ -191,6 +191,9 @@ class Settings:
     enable_async_calls: bool = True
     enable_async_answers: bool = False
 
+    # Storage settings
+    max_stored_history_turns: int = 1000
+
     # Provider configurations
     provider_configs: Dict[Provider, ProviderConfig] = field(default_factory=dict)
 
@@ -215,6 +218,14 @@ class Settings:
         if history_size and history_size.isdigit():
             try:
                 self.history_window_size = int(history_size)
+            except (TypeError, ValueError):
+                # Handle invalid values gracefully
+                pass
+
+        max_stored_history = os.getenv("MAX_STORED_HISTORY_TURNS")
+        if max_stored_history and max_stored_history.isdigit():
+            try:
+                self.max_stored_history_turns = int(max_stored_history)
             except (TypeError, ValueError):
                 # Handle invalid values gracefully
                 pass
@@ -258,6 +269,8 @@ class Settings:
             conv_config = yaml_config["conversation"]
             if "history_window_size" in conv_config:
                 self.history_window_size = conv_config["history_window_size"]
+            if "max_stored_history_turns" in conv_config:
+                self.max_stored_history_turns = conv_config["max_stored_history_turns"]
 
         # Performance settings
         if "performance" in yaml_config:

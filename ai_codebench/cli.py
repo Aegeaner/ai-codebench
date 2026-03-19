@@ -31,7 +31,7 @@ class ChatCLI:
         self.config = config
         self.console = Console()
         self.logger = get_logger(__name__)  # Get logger for ChatCLI
-        self.conversation = ConversationHistory(config.settings.history_window_size)
+        self.conversation = ConversationHistory(config.settings.history_window_size, max_stored_history_turns=config.settings.max_stored_history_turns)
         self.conversation.clear_history()  # Ensure fresh start
         self.router = TaskRouter(config)
         self.current_task_type = TaskType.KNOWLEDGE  # Default to knowledge tasks

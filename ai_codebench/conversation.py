@@ -37,6 +37,7 @@ class ConversationHistory:
             base_dir=Path.home() / ".ai_codebench_history"
         )
         self.turns: List[ConversationTurn] = []
+        self.max_stored_history_turns = max_stored_history_turns
         self._load_session()
 
     def add_turn(
@@ -139,6 +140,10 @@ class ConversationHistory:
 
     def _save_session(self):
         """Save conversation history to file using the configured store"""
+        # Truncate history if it exceeds the maximum storage limit
+        if self.max_stored_history_turns > 0 and len(self.turns) > self.max_stored_history_turns:
+            self.turns = self.turns[-self.max_stored_history_turns:]
+
         try:
             self.conversation_store.save_conversation(
                 self.conversation_id, [asdict(turn) for turn in self.turns]
