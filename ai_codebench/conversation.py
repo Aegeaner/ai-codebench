@@ -61,9 +61,7 @@ class ConversationHistory:
 
         self.turns.append(turn)
 
-        # Keep only the last N turns based on window size
-        if len(self.turns) > self.window_size:
-            self.turns = self.turns[-self.window_size :]
+
 
         self._save_session()
 
@@ -79,9 +77,10 @@ class ConversationHistory:
 
         # Add conversation history within window, unless in CODE mode
         if task_type != TaskType.CODE:
-            for turn in (
-                self.turns[:-1] if self.turns else []
-            ):  # Exclude current turn if it exists
+            # Use the last `window_size` turns as context, unless in CODE mode
+            # This ensures that the context sent to the LLM is limited by window_size
+            history_to_send = self.turns[-self.window_size:] if self.turns else []
+            for turn in history_to_send:
                 messages.append(
                     Message(role="assistant", content=turn.assistant_message)
                 )
@@ -136,8 +135,7 @@ class ConversationHistory:
                 for t in data
                 if t.get("usage") is not None
             ]
-            if len(self.turns) > self.window_size:
-                self.turns = self.turns[-self.window_size :]
+
 
     def _save_session(self):
         """Save conversation history to file using the configured store"""
