@@ -27,8 +27,8 @@ class ConversationHistory:
 
     def __init__(
         self,
-        max_stored_history_turns: int,
         window_size: int = 3,
+        max_stored_history_turns: int = 1000,
         conversation_id: str = "default",
         conversation_store: Optional[ConversationStore] = None,
     ):
