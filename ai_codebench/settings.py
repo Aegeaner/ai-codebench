@@ -115,7 +115,7 @@ SYSTEM_PROMPTS = {
 DEFAULT_MODELS = {
     Provider.CLAUDE: "claude-sonnet-4-5-20250929",
     Provider.DEEPSEEK: "deepseek-v4-flash",
-    Provider.GEMINI: "gemini-3.7-flash",
+    Provider.GEMINI: "gemini-3.8-flash",
     Provider.OPENROUTER: "openai/gpt-4o",
     Provider.KIMI: "kimi-k2-thinking",
     Provider.IMAGEN: "imagen-4.0-generate-001",
