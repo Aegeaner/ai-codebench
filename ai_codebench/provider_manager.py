@@ -1,6 +1,6 @@
 """Manages the instantiation and retrieval of AI model providers."""
 
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 
 from ai_codebench.providers.base import BaseProvider
 from ai_codebench.providers.claude_provider import ClaudeProvider
@@ -29,7 +29,7 @@ class ProviderManager:
 
         if task_type == TaskType.CODE:
             return provider_config.code_model
-        elif task_type in [TaskType.KNOWLEDGE, TaskType.WRITE]:
+        if task_type in [TaskType.KNOWLEDGE, TaskType.WRITE]:
             return provider_config.knowledge_model
 
         return provider_config.default_model or DEFAULT_MODELS.get(provider, "")
@@ -37,9 +37,7 @@ class ProviderManager:
     def _get_base_url(self, provider: Provider) -> Optional[str]:
         """Get the base_url for a provider from settings."""
         provider_config = self.settings.provider_configs.get(provider)
-        if provider_config:
-            return provider_config.base_url
-        return None
+        return provider_config.base_url if provider_config else None
 
     def _create_provider(
         self, provider_type: Provider, task_type: Optional[TaskType] = None
@@ -47,47 +45,48 @@ class ProviderManager:
         """Internal method to create a provider instance."""
         default_model = self._get_default_model(provider_type, task_type)
         base_url = self._get_base_url(provider_type)
-        
-        # Hunyuan doesn't strictly require a configurable base_url
-        if provider_type not in [Provider.HUNYUAN] and not base_url:
+
+        # Hunyuan doesn't require a configurable base_url.
+        if provider_type != Provider.HUNYUAN and not base_url:
             raise ValueError(
                 f"Base URL is not configured for provider {provider_type.value}"
             )
 
-        if provider_type == Provider.CLAUDE and self.settings.ANTHROPIC_API_KEY:
+        settings = self.settings
+        if provider_type == Provider.CLAUDE and settings.ANTHROPIC_API_KEY:
             return ClaudeProvider(
-                api_key=self.settings.ANTHROPIC_API_KEY,
+                api_key=settings.ANTHROPIC_API_KEY,
                 default_model=default_model,
                 base_url=base_url,
             )
-        elif provider_type == Provider.DEEPSEEK and self.settings.deepseek_api_key:
+        if provider_type == Provider.DEEPSEEK and settings.deepseek_api_key:
             return DeepSeekProvider(
-                api_key=self.settings.deepseek_api_key,
+                api_key=settings.deepseek_api_key,
                 default_model=default_model,
                 base_url=base_url,
             )
-        elif provider_type == Provider.GEMINI and self.settings.gemini_api_key:
+        if provider_type == Provider.GEMINI and settings.gemini_api_key:
             return GeminiProvider(
-                api_key=self.settings.gemini_api_key,
+                api_key=settings.gemini_api_key,
                 default_model=default_model,
                 base_url=base_url,
             )
-        elif provider_type == Provider.HUNYUAN and self.settings.tencent_secret_id and self.settings.tencent_secret_key:
-             return HunyuanProvider(
-                 secret_id=self.settings.tencent_secret_id,
-                 secret_key=self.settings.tencent_secret_key,
-                 base_url=base_url or "aiart.eu-frankfurt.tencentcloudapi.com",
-                 default_model=default_model,
-             )
-        elif provider_type == Provider.OPENROUTER and self.settings.openrouter_api_key:
+        if provider_type == Provider.HUNYUAN and settings.tencent_secret_id and settings.tencent_secret_key:
+            return HunyuanProvider(
+                secret_id=settings.tencent_secret_id,
+                secret_key=settings.tencent_secret_key,
+                base_url=base_url or "aiart.eu-frankfurt.tencentcloudapi.com",
+                default_model=default_model,
+            )
+        if provider_type == Provider.OPENROUTER and settings.openrouter_api_key:
             return OpenAICompatibleProvider(
-                api_key=self.settings.openrouter_api_key,
+                api_key=settings.openrouter_api_key,
                 base_url=base_url,
                 default_model=default_model,
             )
-        elif provider_type == Provider.KIMI and self.settings.kimi_api_key:
+        if provider_type == Provider.KIMI and settings.kimi_api_key:
             return KimiProvider(
-                api_key=self.settings.kimi_api_key,
+                api_key=settings.kimi_api_key,
                 default_model=default_model,
                 base_url=base_url,
             )
@@ -103,18 +102,23 @@ class ProviderManager:
                 self._providers[provider_type] = provider
         return self._providers.get(provider_type)
 
-    def has_api_key(self, provider: Provider) -> bool:
-        """Check if API key is available for a provider"""
-        key_map = {
-            Provider.CLAUDE: self.settings.ANTHROPIC_API_KEY,
-            Provider.DEEPSEEK: self.settings.deepseek_api_key,
-            Provider.GEMINI: self.settings.gemini_api_key,
-            Provider.OPENROUTER: self.settings.openrouter_api_key,
-            Provider.KIMI: self.settings.kimi_api_key,
-            Provider.HUNYUAN: self.settings.tencent_secret_id and self.settings.tencent_secret_key,
+    def get_provider_info(self, provider: Provider) -> Dict[str, Any]:
+        """Get information about a specific provider."""
+        provider_instance = self.get_provider(provider)
+        if not provider_instance:
+            return {"available": False}
+
+        return {
+            "available": True,
+            "default_model": provider_instance.default_model,
+            "supports_caching": provider_instance.supports_caching,
+            "supports_async_batch": provider_instance.supports_async_batch,
         }
-        return key_map.get(provider) is not None
+
+    def has_api_key(self, provider: Provider) -> bool:
+        """Check if credentials are available for a provider."""
+        return self.settings.has_credentials(provider)
 
     def get_available_providers(self) -> List[Provider]:
-        """Get list of providers with available API keys"""
+        """Get list of providers with available credentials."""
         return [provider for provider in Provider if self.has_api_key(provider)]

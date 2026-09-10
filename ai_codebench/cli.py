@@ -18,10 +18,9 @@ from rich.table import Table
 
 from .config import ApplicationConfig
 from .conversation import ConversationHistory
-from .task_router import TaskRouter
+from .provider_manager import ProviderManager
 from .providers.base import Message
 from .settings import TaskType, Provider, ProviderConfig
-from .logger import get_logger
 
 
 class ChatCLI:
@@ -30,10 +29,12 @@ class ChatCLI:
     def __init__(self, config: ApplicationConfig):
         self.config = config
         self.console = Console()
-        self.logger = get_logger(__name__)  # Get logger for ChatCLI
-        self.conversation = ConversationHistory(config.settings.history_window_size, max_stored_history_turns=config.settings.max_stored_history_turns)
+        self.conversation = ConversationHistory(
+            config.settings.history_window_size,
+            max_stored_history_turns=config.settings.max_stored_history_turns,
+        )
         self.conversation.clear_history()  # Ensure fresh start
-        self.router = TaskRouter(config)
+        self.provider_manager = ProviderManager(config.settings)
         self.current_task_type = TaskType.KNOWLEDGE  # Default to knowledge tasks
         self.current_provider: Optional[Provider] = None
         self.stream_mode = "sync"  # Default to sync mode
@@ -59,7 +60,7 @@ class ChatCLI:
 
         for provider in Provider:
             if self.config.has_api_key(provider):
-                info = self.router.get_provider_info(provider)
+                info = self.provider_manager.get_provider_info(provider)
                 provider_table.add_row(
                     provider.value.title(),
                     "✅ Available",
@@ -227,59 +228,48 @@ Available Commands:
         self.console.print(Panel(help_text, title="Help", border_style="blue"))
 
     def _handle_models_command(self, command: str):
-        """Handle /models command to list or switch models"""
+        """Handle /model command to list or switch models."""
         parts = command.split()
-        provider = self.current_provider
-        
-        # We need a provider context to list models, but if we are switching models,
-        # we might resolve the provider from the model name itself.
-        
-        # If a model name is provided, try to switch to it
-        if len(parts) > 1:
-            new_model = parts[1]
-            
-            # Resolve provider from model name
-            resolved_provider = self.config.resolve_provider_for_model(new_model)
-            
-            if resolved_provider and resolved_provider != provider:
-                # If we found a matching provider, switch to it
-                if self.config.has_api_key(resolved_provider):
-                    self.current_provider = resolved_provider
-                    provider = self.current_provider
-                    
-                    # Ensure config exists for the resolved provider (creating defaults if needed)
-                    if provider not in self.config.settings.provider_configs:
-                         # Default config creation logic
-                         default_config = ProviderConfig(
-                             default_model=new_model,
-                             knowledge_model=new_model,
-                             code_model=new_model,
-                             base_url="",
-                             image_model=new_model
-                         )
-                         self.config.settings.provider_configs[provider] = default_config
-                    
-                    self.console.print(f"[green]Auto-switched to {provider.value.title()} provider[/green]")
-                else:
-                    self.console.print(f"[yellow]Model '{new_model}' requires {resolved_provider.value.title()}, but no API key is configured.[/yellow]")
-                    return
+        new_model = parts[1] if len(parts) > 1 else None
 
-        # Now check if we have a valid provider selected
+        # If a model name is provided, resolve and switch to its provider.
+        if new_model:
+            resolved_provider = self.config.resolve_provider_for_model(new_model)
+            if resolved_provider and resolved_provider != self.current_provider:
+                if not self.config.has_api_key(resolved_provider):
+                    self.console.print(
+                        f"[yellow]Model '{new_model}' requires {resolved_provider.value.title()}, "
+                        "but no API key is configured.[/yellow]"
+                    )
+                    return
+                self.current_provider = resolved_provider
+                if resolved_provider not in self.config.settings.provider_configs:
+                    self.config.settings.provider_configs[resolved_provider] = ProviderConfig(
+                        default_model=new_model,
+                        knowledge_model=new_model,
+                        code_model=new_model,
+                        image_model=new_model,
+                        base_url="",
+                    )
+                self.console.print(
+                    f"[green]Auto-switched to {resolved_provider.value.title()} provider[/green]"
+                )
+
+        provider = self.current_provider
         if not provider or not self.config.has_api_key(provider):
             self.console.print("[yellow]Select a provider first[/yellow]")
             return
 
         provider_config = self.config.settings.provider_configs.get(provider)
-        
-        # If config is missing (and wasn't created above), we can't proceed with setting the model
-        if not provider_config and len(parts) > 1:
-             self.console.print(f"[red]Configuration not found for {provider.value.title()}[/red]")
-             return
 
-        # If a model name is provided, finalize the switch
-        if len(parts) > 1:
+        if new_model:
+            if not provider_config:
+                self.console.print(
+                    f"[red]Configuration not found for {provider.value.title()}[/red]"
+                )
+                return
+
             task_type = self.current_task_type
-            
             if task_type == TaskType.CODE:
                 provider_config.code_model = new_model
                 type_name = "coding"
@@ -287,7 +277,7 @@ Available Commands:
                 provider_config.knowledge_model = new_model
                 type_name = "knowledge"
             elif task_type == TaskType.WRITE:
-                provider_config.knowledge_model = new_model # Write uses knowledge model usually, or separate if config allowed
+                provider_config.knowledge_model = new_model
                 type_name = "writing"
             elif task_type == TaskType.IMAGE:
                 provider_config.image_model = new_model
@@ -295,33 +285,24 @@ Available Commands:
             else:
                 provider_config.default_model = new_model
                 type_name = "default"
-                
-            self.console.print(f"[green]Switched {provider.value.title()} {type_name} model to: {new_model}[/green]")
-            return
 
-        models = self.config.get_provider_models(provider)
-        if not models:
             self.console.print(
-                f"[yellow]No models for {provider.value.title()}[/yellow]"
-            )
-            self.logger.warning(
-                f"Model command failed: No models for {provider.value.title()}"
+                f"[green]Switched {provider.value.title()} {type_name} model to: {new_model}[/green]"
             )
             return
 
         model_table = Table(title=f"{provider.value.title()} Models")
         model_table.add_column("Name", style="cyan")
-        model_table.add_column("Type", style="magenta")  # New column for model type
+        model_table.add_column("Type", style="magenta")
 
-        provider_config = self.config.settings.provider_configs.get(provider)
         active_model = self.config.get_model_for_provider_and_task(
             provider, self.current_task_type
         )
 
-        # Collect unique models
-        display_models_set = set()
+        # Collect unique models (configured text models + image models).
+        display_models = set()
         if provider_config:
-            display_models_set.update(
+            display_models.update(
                 filter(None, [
                     provider_config.default_model,
                     provider_config.knowledge_model,
@@ -331,30 +312,33 @@ Available Commands:
             )
             for model_dict in provider_config.models:
                 if name := model_dict.get("name"):
-                    display_models_set.add(name)
+                    display_models.add(name)
 
-        # Include image generation models (e.g. Nano Banana for Gemini)
-        image_model_names = set(self.config.get_image_models(provider))
-        display_models_set.update(image_model_names)
+        image_models = set(self.config.get_image_models(provider))
+        display_models.update(image_models)
 
-        for model_name in sorted(display_models_set):
+        if not display_models:
+            self.console.print(f"[yellow]No models for {provider.value.title()}[/yellow]")
+            return
+
+        for model_name in sorted(display_models):
             types = []
             if provider_config:
                 if model_name == provider_config.knowledge_model:
                     types.append("Knowledge")
                 if model_name == provider_config.code_model:
                     types.append("Code")
-            if model_name in image_model_names:
+            if model_name in image_models:
                 types.append("Image")
-            
+
             type_str = ", ".join(types) if types else "Default"
             style = "bold yellow" if model_name == active_model else ""
-            
             model_table.add_row(model_name, type_str, style=style)
 
         self.console.print(model_table)
         self.console.print(
-            f"Currently active model for '{self.current_task_type.value.title()}' tasks: [bold yellow]{active_model}[/bold yellow]"
+            f"Currently active model for '{self.current_task_type.value.title()}' tasks: "
+            f"[bold yellow]{active_model}[/bold yellow]"
         )
 
     def _handle_provider_command(self, command: str):
@@ -405,10 +389,20 @@ Available Commands:
                 )
                 return
 
-            provider = self.router.get_available_providers()[self.current_provider]
+            provider = self.provider_manager.get_provider(self.current_provider)
+            if provider is None:
+                self.console.print(
+                    Panel(
+                        "No credentials available for this provider",
+                        title="Error",
+                        border_style="red",
+                    )
+                )
+                return
+
             # Capture provider name here to ensure correct attribution in async tasks
             provider_name = self.current_provider.value.title()
-            
+
             model = self.config.get_model_for_provider_and_task(
                 self.current_provider, self.current_task_type
             )
@@ -416,28 +410,15 @@ Available Commands:
             messages = self.conversation.get_messages_for_api(
                 include_system=True, task_type=self.current_task_type
             )
+            messages.append(
+                Message(role="user", content=self._format_user_input(user_input))
+            )
 
-            # Format user input based on task type
-            if self.current_task_type == TaskType.WRITE:
-                formatted_user_input = f"Please help me polish the following English writing drafts for clarity, grammar, and natural tone. Keep the author's voice as much as possible:\n\n{user_input}"
-            elif self.current_task_type == TaskType.CODE:
-                formatted_user_input = f"Please help me analyze the algorithm ideas, algorithm steps and computational complexity, but don't write specific code: \n\n{user_input}"
-            elif self.current_task_type == TaskType.KNOWLEDGE:
-                formatted_user_input = (
-                    f"Please teach me the concept step by step: \n\n{user_input}"
-                )
-            elif self.current_task_type == TaskType.IMAGE:
-                formatted_user_input = f"Generate an image based on: {user_input}"
-            else:
-                formatted_user_input = user_input
-
-            messages.append(Message(role="user", content=formatted_user_input))
-
-            # Get max_tokens from provider config
-            provider_config = self.config.settings.provider_configs.get(self.current_provider)
+            provider_config = self.config.settings.provider_configs.get(
+                self.current_provider
+            )
             max_tokens = provider_config.max_tokens if provider_config else None
 
-            # Calculate output directory for images
             date_str = datetime.now().strftime("%Y%m%d")
             output_dir = Path("answers") / date_str
 
@@ -445,49 +426,40 @@ Available Commands:
                 self.console.print(
                     "[bold yellow]Request sent to AI. Response will be recorded in the background.[/bold yellow]"
                 )
-                if self.stream_mode == "async":
-                    if provider.supports_async and hasattr(
-                        provider, "stream_completion"
-                    ):
-                        self._current_stream_task = asyncio.create_task(
-                            self._stream_response_and_save_background(
-                                provider, messages, model, user_input, provider_name, max_tokens=max_tokens, output_dir=output_dir
-                            )
-                        )
-                    else:
-                        self._current_stream_task = asyncio.create_task(
-                            self._get_basic_response_and_save_background(
-                                provider, messages, model, user_input, provider_name, max_tokens=max_tokens, output_dir=output_dir
-                            )
-                        )
-                else:
-                    self._current_stream_task = asyncio.create_task(
-                        self._get_basic_response_and_save_background(
-                            provider, messages, model, user_input, provider_name, max_tokens=max_tokens, output_dir=output_dir
-                        )
+                self._current_stream_task = asyncio.create_task(
+                    self._respond_and_save_background(
+                        provider, messages, model, user_input, provider_name,
+                        max_tokens=max_tokens, output_dir=output_dir,
                     )
+                )
             else:  # Foreground processing
-                if self.stream_mode == "async":
-                    if provider.supports_async and hasattr(
-                        provider, "stream_completion"
-                    ):
-                        await self._stream_response_and_display(
-                            provider, messages, model, user_input, provider_name, max_tokens=max_tokens, output_dir=output_dir
-                        )
-                    else:
-                        self.console.print(
-                            "[yellow]Async mode not supported by provider, falling back to sync[/yellow]"
-                        )
-                        await self._get_basic_response_and_display(
-                            provider, messages, model, user_input, provider_name, max_tokens=max_tokens, output_dir=output_dir
-                        )
-                else:
-                    await self._get_basic_response_and_display(
-                        provider, messages, model, user_input, provider_name, max_tokens=max_tokens, output_dir=output_dir
-                    )
+                await self._respond_and_display(
+                    provider, messages, model, user_input, provider_name,
+                    max_tokens=max_tokens, output_dir=output_dir,
+                )
 
         except Exception as e:
             self.console.print(f"[red]Error: {e}[/red]")
+
+    def _format_user_input(self, user_input: str) -> str:
+        """Format raw user input based on the active task type."""
+        if self.current_task_type == TaskType.WRITE:
+            return (
+                "Please help me polish the following English writing drafts for clarity, "
+                "grammar, and natural tone. Keep the author's voice as much as possible:\n\n"
+                f"{user_input}"
+            )
+        if self.current_task_type == TaskType.CODE:
+            return (
+                "Please help me analyze the algorithm ideas, algorithm steps and "
+                "computational complexity, but don't write specific code: \n\n"
+                f"{user_input}"
+            )
+        if self.current_task_type == TaskType.KNOWLEDGE:
+            return f"Please teach me the concept step by step: \n\n{user_input}"
+        if self.current_task_type == TaskType.IMAGE:
+            return f"Generate an image based on: {user_input}"
+        return user_input
 
     def _handle_mode_command(self, command: str):
         """Handle /mode command to switch streaming modes"""
@@ -600,190 +572,130 @@ Available Commands:
             status = "on" if self.config.enable_async_answers else "off"
             self.console.print(f"Background saving is currently {status}")
 
-    async def _stream_response_and_display(self, provider, messages, model, user_input, provider_name, max_tokens=None, output_dir=None):
-        """Handle streaming response with markdown formatting"""
-        self.console.print(f"\n[bold blue]Assistant ({model}):[/bold blue]")
-        response_text = ""
-        usage_data = None
-        
+    def _build_kwargs(self, output_dir, max_tokens=None):
+        """Build provider-call kwargs from the active task and options."""
         kwargs = {"task": self.current_task_type}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
         if output_dir and self.current_task_type == TaskType.IMAGE:
             kwargs["output_dir"] = output_dir
+        return kwargs
 
-        if self.stream_mode == "async":
-            # Async mode - print chunks immediately as plain text
-            try:
-                response_text = ""
-                usage_data = None
-                async for chunk in provider.stream_completion(messages, model, **kwargs):
-                    if isinstance(chunk, dict):
-                        if "text" in chunk:
-                            text_chunk = chunk["text"]
-                            if "[Image saved to " in text_chunk:
-                                text_chunk = self._rename_image_output(text_chunk, user_input)
-                            response_text += text_chunk
-                            self.console.print(text_chunk, end="", markup=False)
-                        if "usage" in chunk:
-                            usage_data = chunk["usage"]
-                        if "error" in chunk:
-                            self.console.print(chunk["error"], style="red")
-                            response_text += f"\n[ERROR: {chunk['error']}]"
-                    else:
-                        self.console.print(
-                            f"[red]Invalid chunk format: {type(chunk)}[/red]"
-                        )
+    def _should_stream(self, provider) -> bool:
+        return (
+            self.stream_mode == "async"
+            and provider.supports_async
+            and hasattr(provider, "stream_completion")
+        )
 
-                self.console.print()
-                if self.config.enable_async_answers:
-                    task = asyncio.create_task(
-                        self._add_to_history(
-                            user_input, response_text, model, provider_name, usage_data
-                        )
-                    )
-                    task.add_done_callback(
-                        lambda t: (
-                            self.console.print(
-                                f"[red]Background saving task error: {t.exception()}[/red]"
-                            )
-                            if t.exception()
-                            else None
-                        )
-                    )
-                    self.console.print(
-                        "[bold yellow]Response recorded in background.[/bold yellow]"
-                    )
-                else:
-                    await self._add_to_history(
-                        user_input, response_text, model, provider_name, usage_data
-                    )
-            except Exception as e:
-                self.console.print(
-                    Panel(f"Stream error: {str(e)}", title="Error", border_style="red")
-                )
+    async def _basic_collect(self, provider, messages, model, kwargs, user_input):
+        """Run a non-streaming provider call and return (content, usage)."""
+        response = await provider.chat_completion(messages, model, **kwargs)
+        if hasattr(response, "content"):
+            content, usage = response.content, getattr(response, "usage", None)
+        elif isinstance(response, dict):
+            content = response.get("choices", [{}])[0].get("text", "")
+            usage = response.get("usage")
+        else:
+            content, usage = str(response), None
+        return self._rename_image_output(content, user_input), usage
 
-    async def _get_basic_response_and_display(
-        self, provider, messages, model, user_input, provider_name, max_tokens=None, output_dir=None
+    async def _stream_collect(
+        self, provider, messages, model, kwargs, user_input, display=False
     ):
-        """Get non-streaming response"""
-        kwargs = {"task": self.current_task_type}
-        if max_tokens:
-            kwargs["max_tokens"] = max_tokens
-        if output_dir and self.current_task_type == TaskType.IMAGE:
-            kwargs["output_dir"] = output_dir
+        """Run a streaming provider call and return (content, usage).
 
-        with self.console.status("[bold blue]Thinking...[/bold blue]"):
-            response = await provider.chat_completion(messages, model, **kwargs)
+        When ``display`` is True, chunks are printed to the console as they arrive.
+        """
+        content = ""
+        usage = None
+        async for chunk in provider.stream_completion(messages, model, **kwargs):
+            if not isinstance(chunk, dict):
+                if display:
+                    self.console.print(
+                        f"[red]Invalid chunk format: {type(chunk)}[/red]"
+                    )
+                continue
+            if "text" in chunk:
+                text = chunk["text"]
+                if "[Image saved to " in text:
+                    text = self._rename_image_output(text, user_input)
+                content += text
+                if display:
+                    self.console.print(text, end="", markup=False)
+            if "usage" in chunk:
+                usage = chunk["usage"]
+            if "error" in chunk:
+                content += f"\n[ERROR: {chunk['error']}]"
+                if display:
+                    self.console.print(chunk["error"], style="red")
+        return content, usage
+
+    async def _respond_and_display(
+        self, provider, messages, model, user_input, provider_name,
+        max_tokens=None, output_dir=None,
+    ):
+        """Run a request and display the response in the foreground."""
+        kwargs = self._build_kwargs(output_dir, max_tokens)
+        stream = self._should_stream(provider)
+        if self.stream_mode == "async" and not stream:
+            self.console.print(
+                "[yellow]Async mode not supported by provider, falling back to sync[/yellow]"
+            )
+
+        if stream:
             self.console.print(f"\n[bold blue]Assistant ({model}):[/bold blue]")
-
-            # Handle different response formats
-            if hasattr(response, "content"):
-                content = response.content
-                usage = response.usage if hasattr(response, "usage") else None
-            elif isinstance(response, dict):
-                content = response.get("choices", [{}])[0].get("text", "")
-                usage = response.get("usage")
-            else:
-                content = str(response)
-                usage = None
-
-            content = self._rename_image_output(content, user_input)
+            content, usage = await self._stream_collect(
+                provider, messages, model, kwargs, user_input, display=True
+            )
+            self.console.print()
+        else:
+            with self.console.status("[bold blue]Thinking...[/bold blue]"):
+                content, usage = await self._basic_collect(
+                    provider, messages, model, kwargs, user_input
+                )
+            self.console.print(f"\n[bold blue]Assistant ({model}):[/bold blue]")
             self.console.print(Markdown(content))
-            if self.config.enable_async_answers:
-                task = asyncio.create_task(
-                    self._add_to_history(user_input, content, model, provider_name, usage)
-                )
-                task.add_done_callback(
-                    lambda t: (
-                        self.console.print(
-                            f"[red]Background saving task error: {t.exception()}[/red]"
-                        )
-                        if t.exception()
-                        else None
-                    )
-                )
-                self.console.print(
-                    "[bold yellow]Response recorded in background.[/bold yellow]"
+
+        await self._record_turn(user_input, content, model, provider_name, usage)
+
+    async def _respond_and_save_background(
+        self, provider, messages, model, user_input, provider_name,
+        max_tokens=None, output_dir=None,
+    ):
+        """Run a request in the background and save the response to history."""
+        kwargs = self._build_kwargs(output_dir, max_tokens)
+        try:
+            if self._should_stream(provider):
+                content, usage = await self._stream_collect(
+                    provider, messages, model, kwargs, user_input
                 )
             else:
-                await self._add_to_history(user_input, content, model, provider_name, usage)
-
-    async def _stream_response_and_save_background(
-        self, provider, messages, model, user_input, provider_name, max_tokens=None, output_dir=None
-    ):
-        """Handle streaming response in background and save"""
-        response_text = ""
-        usage_data = None
-        
-        kwargs = {"task": self.current_task_type}
-        if max_tokens:
-            kwargs["max_tokens"] = max_tokens
-        if output_dir and self.current_task_type == TaskType.IMAGE:
-            kwargs["output_dir"] = output_dir
-
-        try:
-            async for chunk in provider.stream_completion(messages, model, **kwargs):
-                if isinstance(chunk, dict):
-                    if "text" in chunk:
-                        text_chunk = chunk["text"]
-                        if "[Image saved to " in text_chunk:
-                            text_chunk = self._rename_image_output(text_chunk, user_input)
-                        response_text += text_chunk
-                    if "error" in chunk:
-                        response_text += f"\n[ERROR: {chunk['error']}]"
-                if "usage" in chunk:
-                    usage_data = chunk["usage"]
-            task = asyncio.create_task(
-                self._add_to_history(user_input, response_text, model, provider_name, usage_data)
-            )
-            task.add_done_callback(
-                lambda t: (
-                    self.console.print(
-                        f"[red]Background saving task error: {t.exception()}[/red]"
-                    )
-                    if t.exception()
-                    else None
+                content, usage = await self._basic_collect(
+                    provider, messages, model, kwargs, user_input
                 )
-            )
-        except Exception as e:
-            error_msg = f"Error: {str(e)}"
-            self.console.print(f"[red]Background stream error: {str(e)}[/red]")
-            await self._add_to_history(user_input, error_msg, model, provider_name)
-
-    async def _get_basic_response_and_save_background(
-        self, provider, messages, model, user_input, provider_name, max_tokens=None, output_dir=None
-    ):
-        """Get non-streaming response in background and save"""
-        kwargs = {"task": self.current_task_type}
-        if max_tokens:
-            kwargs["max_tokens"] = max_tokens
-        if output_dir and self.current_task_type == TaskType.IMAGE:
-            kwargs["output_dir"] = output_dir
-
-        try:
-            response = await provider.chat_completion(messages, model, **kwargs)
-            content = (
-                response.content if hasattr(response, "content") else str(response)
-            )
-            content = self._rename_image_output(content, user_input)
-            usage = response.usage if hasattr(response, "usage") else None
-            task = asyncio.create_task(
-                self._add_to_history(user_input, content, model, provider_name, usage)
-            )
-            task.add_done_callback(
-                lambda t: (
-                    self.console.print(
-                        f"[red]Background saving task error: {t.exception()}[/red]"
-                    )
-                    if t.exception()
-                    else None
-                )
-            )
+            await self._record_turn(user_input, content, model, provider_name, usage)
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             self.console.print(f"[red]Background API error: {str(e)}[/red]")
             await self._add_to_history(user_input, error_msg, model, provider_name)
+
+    async def _record_turn(
+        self, user_input, content, model, provider_name, usage=None
+    ):
+        """Add a turn to history, deferring to a background task when enabled."""
+        if self.config.enable_async_answers:
+            task = asyncio.create_task(
+                self._add_to_history(user_input, content, model, provider_name, usage)
+            )
+            task.add_done_callback(self._on_record_done)
+        else:
+            await self._add_to_history(user_input, content, model, provider_name, usage)
+
+    def _on_record_done(self, task):
+        exc = task.exception()
+        if exc:
+            self.console.print(f"[red]Background saving task error: {exc}[/red]")
 
     def _clean_filename(self, filename):
         """Remove newlines and trim whitespace from filename"""

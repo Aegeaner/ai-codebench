@@ -83,40 +83,12 @@ class ConversationHistory:
             # This ensures that the context sent to the LLM is limited by window_size
             history_to_send = self.turns[-self.window_size:] if self.turns else []
             for turn in history_to_send:
+                messages.append(Message(role="user", content=turn.user_message))
                 messages.append(
                     Message(role="assistant", content=turn.assistant_message)
                 )
-                messages.append(Message(role="user", content=turn.user_message))
 
         return messages
-
-    def get_context_summary(self) -> str:
-        """Get a summary of recent conversation context"""
-        if not self.turns:
-            return "No conversation history"
-
-        recent_turns = self.turns[-3:]  # Last 3 turns for context
-        summary_parts = []
-
-        for i, turn in enumerate(recent_turns, 1):
-            summary_parts.append(f"Turn {i}:")
-            summary_parts.append(
-                f"  User: {turn.user_message[:100]}{'...' if len(turn.user_message) > 100 else ''}"
-            )
-            summary_parts.append(
-                f"  Assistant ({turn.provider}): {turn.assistant_message[:100]}{'...' if len(turn.assistant_message) > 100 else ''}"
-            )
-            if turn.usage:
-                tokens = turn.usage.get(
-                    "total_tokens",
-                    turn.usage.get("input_tokens", 0)
-                    + turn.usage.get("output_tokens", 0),
-                )
-                summary_parts.append(
-                    f"  Tokens: {tokens}{' (cached)' if turn.cached else ''}"
-                )
-
-        return "\n".join(summary_parts)
 
     def clear_history(self):
         """Clear all conversation history"""

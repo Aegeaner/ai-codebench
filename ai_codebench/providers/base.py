@@ -53,10 +53,9 @@ class BaseProvider(ABC):
         pass
 
     @property
-    @abstractmethod
     def supports_async(self) -> bool:
-        """Whether this provider supports async operations"""
-        pass
+        """Whether this provider supports async operations."""
+        return False
 
     @abstractmethod
     async def stream_completion(
@@ -73,16 +72,14 @@ class BaseProvider(ABC):
         raise NotImplementedError()
 
     @property
-    @abstractmethod
     def supports_caching(self) -> bool:
-        """Whether this provider supports context caching"""
-        pass
+        """Whether this provider supports context caching."""
+        return False
 
     @property
-    @abstractmethod
     def supports_async_batch(self) -> bool:
-        """Whether this provider supports async/batch operations"""
-        pass
+        """Whether this provider supports async/batch operations."""
+        return False
 
     @property
     def default_model(self) -> str:
@@ -90,6 +87,14 @@ class BaseProvider(ABC):
         if self._configured_default_model:
             return self._configured_default_model
         raise ValueError("No default model configured for provider")
+
+    @staticmethod
+    def last_user_message(messages: List[Message]) -> Optional[str]:
+        """Extract the most recent user message from a list of messages."""
+        for message in reversed(messages):
+            if message.role == "user":
+                return message.content
+        return None
 
     def _extract_usage_stats(self, response: object) -> Dict[str, int]:
         """Standardized usage stats extraction across all providers"""

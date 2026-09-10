@@ -2,7 +2,6 @@
 
 from typing import AsyncGenerator, List, Optional, Dict, Any
 import openai
-from openai import APIStatusError, APITimeoutError, APIConnectionError
 from .base import BaseProvider, Message, ChatResponse, ProviderAPIError
 from ..settings import TASK_GENERATION_CONFIG
 
@@ -49,7 +48,7 @@ class OpenAICompatibleProvider(BaseProvider):
                 content=response.choices[0].message.content,
                 usage=self._extract_usage_stats(response),
             )
-        except (APIStatusError, APITimeoutError, APIConnectionError, Exception) as e:
+        except Exception as e:
             raise ProviderAPIError(f"OpenAI-compatible API error: {e}") from e
 
     async def stream_completion(
@@ -74,7 +73,7 @@ class OpenAICompatibleProvider(BaseProvider):
                     usage = self._extract_usage_stats(chunk)
                     if usage:
                         yield {"usage": usage}
-        except (APIStatusError, APITimeoutError, APIConnectionError, Exception) as e:
+        except Exception as e:
             yield {"error": f"OpenAI-compatible streaming API error: {e}"}
 
     @property

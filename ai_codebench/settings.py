@@ -228,6 +228,18 @@ class Settings:
                 # Handle invalid values gracefully
                 pass
 
+    def has_credentials(self, provider: Provider) -> bool:
+        """Whether credentials are configured for a provider."""
+        credentials = {
+            Provider.CLAUDE: self.ANTHROPIC_API_KEY,
+            Provider.DEEPSEEK: self.deepseek_api_key,
+            Provider.GEMINI: self.gemini_api_key,
+            Provider.OPENROUTER: self.openrouter_api_key,
+            Provider.KIMI: self.kimi_api_key,
+            Provider.HUNYUAN: self.tencent_secret_id and self.tencent_secret_key,
+        }
+        return credentials.get(provider) is not None
+
     @classmethod
     def from_file(cls, config_path: Optional[Path] = None) -> "Settings":
         """Load configuration from YAML file"""
