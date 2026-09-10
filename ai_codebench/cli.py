@@ -325,12 +325,17 @@ Available Commands:
                 filter(None, [
                     provider_config.default_model,
                     provider_config.knowledge_model,
-                    provider_config.code_model
+                    provider_config.code_model,
+                    provider_config.image_model,
                 ])
             )
             for model_dict in provider_config.models:
                 if name := model_dict.get("name"):
                     display_models_set.add(name)
+
+        # Include image generation models (e.g. Nano Banana for Gemini)
+        image_model_names = set(self.config.get_image_models(provider))
+        display_models_set.update(image_model_names)
 
         for model_name in sorted(display_models_set):
             types = []
@@ -339,6 +344,8 @@ Available Commands:
                     types.append("Knowledge")
                 if model_name == provider_config.code_model:
                     types.append("Code")
+            if model_name in image_model_names:
+                types.append("Image")
             
             type_str = ", ".join(types) if types else "Default"
             style = "bold yellow" if model_name == active_model else ""

@@ -9,6 +9,7 @@ from ai_codebench.settings import (
     Provider,
     DEFAULT_MODELS,
     IMAGE_MODELS,
+    NANO_BANANA_MODELS,
     PROVIDER_MODEL_PATTERNS,
 )
 
@@ -106,6 +107,18 @@ class ApplicationConfig:
             ]
 
         return models
+
+    def get_image_models(self, provider: Provider) -> List[str]:
+        """Get available image generation models for a provider."""
+        models = []
+        provider_config = self.settings.provider_configs.get(provider)
+        if provider_config and provider_config.image_model:
+            models.append(provider_config.image_model)
+        if provider in IMAGE_MODELS:
+            models.append(IMAGE_MODELS[provider])
+        if provider == Provider.GEMINI:
+            models.extend(NANO_BANANA_MODELS)
+        return list(dict.fromkeys(models))
 
     def get_default_model(self, provider: Provider) -> str:
         """Get the default model for a provider"""
