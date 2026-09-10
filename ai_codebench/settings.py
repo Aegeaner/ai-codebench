@@ -22,7 +22,6 @@ class Provider(Enum):
     OPENROUTER = "openrouter"
     KIMI = "kimi"
     HUNYUAN = "hunyuan"
-    IMAGEN = "imagen"
 
 
 # Task-specific generation parameters
@@ -118,20 +117,20 @@ DEFAULT_MODELS = {
     Provider.GEMINI: "gemini-3.8-flash",
     Provider.OPENROUTER: "openai/gpt-4o",
     Provider.KIMI: "kimi-k2-thinking",
-    Provider.IMAGEN: "imagen-4.0-generate-001",
 }
 
 # Image models for each provider (if supported)
 IMAGE_MODELS = {
-    Provider.GEMINI: "gemini-3.1-flash-image-preview",
+    Provider.GEMINI: "gemini-2.5-flash-image",
     Provider.HUNYUAN: "hunyuan-3.0",
 }
 
-# Supported Imagen models for Gemini
-GEMINI_IMAGEN_MODELS = [
-    "imagen-4.0-generate-001",
-    "imagen-4.0-ultra-generate-001",
-    "imagen-4.0-fast-generate-001",
+# Nano Banana (Gemini native image generation) models
+NANO_BANANA_MODELS = [
+    "gemini-3.1-flash-lite-image",
+    "gemini-3.1-flash-image",
+    "gemini-3-pro-image",
+    "gemini-2.5-flash-image",
 ]
 
 # Patterns to identify provider by model name
@@ -139,7 +138,6 @@ PROVIDER_MODEL_PATTERNS = {
     Provider.CLAUDE: ["claude-"],
     Provider.DEEPSEEK: ["deepseek-"],
     Provider.GEMINI: ["gemini-"],
-    Provider.IMAGEN: ["imagen-"],
     Provider.KIMI: ["moonshot-"],
     Provider.HUNYUAN: ["hunyuan-"],
 }

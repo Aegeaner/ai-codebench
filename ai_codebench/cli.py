@@ -214,7 +214,7 @@ Multi-provider AI assistant with model configuration support.
 Available Commands:
 - /help - Show this help message
 - /model [name] - List available models or switch to a specific model for current task
-- /provider [name] - Switch provider (claude/deepseek/gemini/openrouter/kimi/hunyuan/imagen)
+- /provider [name] - Switch provider (claude/deepseek/gemini/openrouter/kimi/hunyuan)
 - /task [type] - Switch task type (code/learning/write/image)
 - /stat - Show usage statistics
 - /mode [sync|async] - Set streaming mode (default: sync)
@@ -237,10 +237,6 @@ Available Commands:
         # If a model name is provided, try to switch to it
         if len(parts) > 1:
             new_model = parts[1]
-            
-            # Global alias handling
-            if new_model.lower() == "imagen":
-                new_model = "imagen-4.0-generate-001"
             
             # Resolve provider from model name
             resolved_provider = self.config.resolve_provider_for_model(new_model)
@@ -1051,7 +1047,7 @@ async def async_main(
 @click.option(
     "--provider",
     "-p",
-    type=click.Choice(["claude", "deepseek", "gemini", "openrouter", "kimi", "hunyuan", "imagen"]),
+    type=click.Choice(["claude", "deepseek", "gemini", "openrouter", "kimi", "hunyuan"]),
     help="Preferred provider",
 )
 @click.option(

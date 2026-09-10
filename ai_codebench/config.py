@@ -120,7 +120,6 @@ class ApplicationConfig:
             Provider.CLAUDE: self.settings.ANTHROPIC_API_KEY,
             Provider.DEEPSEEK: self.settings.deepseek_api_key,
             Provider.GEMINI: self.settings.gemini_api_key,
-            Provider.IMAGEN: self.settings.gemini_api_key,
             Provider.OPENROUTER: self.settings.openrouter_api_key,
             Provider.KIMI: self.settings.kimi_api_key,
             Provider.HUNYUAN: self.settings.tencent_secret_id and self.settings.tencent_secret_key,
