@@ -116,7 +116,7 @@ DEFAULT_MODELS = {
     Provider.DEEPSEEK: "deepseek-flash",
     Provider.GEMINI: "gemini-3.8-flash",
     Provider.OPENROUTER: "openai/gpt-4o",
-    Provider.KIMI: "kimi-k2-thinking",
+    Provider.KIMI: "kimi-k3",
 }
 
 # Image models for each provider (if supported)
@@ -138,7 +138,7 @@ PROVIDER_MODEL_PATTERNS = {
     Provider.CLAUDE: ["claude-"],
     Provider.DEEPSEEK: ["deepseek-"],
     Provider.GEMINI: ["gemini-"],
-    Provider.KIMI: ["moonshot-"],
+    Provider.KIMI: ["kimi-"],
     Provider.HUNYUAN: ["hunyuan-"],
 }
 

@@ -15,7 +15,7 @@ class KimiProvider(OpenAICompatibleProvider):
         """Apply task-specific parameters for Kimi-specific models."""
         super()._apply_task_parameters(model, kwargs)
 
-        if model in ["kimi-k2-thinking", "kimi-k2.5"]:
+        if model in ["kimi-k3", "kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k2.6"]:
             # Kimi Thinking series strict requirements
             kwargs["temperature"] = 1.0
             kwargs["top_p"] = 0.95
